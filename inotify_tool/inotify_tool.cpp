@@ -311,12 +311,8 @@ uint32_t InotifyTool::inotifyEvent2RealInotifyEv(uint32_t ev) const noexcept
     uint32_t inotifyEv = 0;
 
 #define INOTIFY_MAP(XXX)                                        \
-    XXX(InotifyEvent::EV_IN_ACCESS, IN_ACCESS)                  \
     XXX(InotifyEvent::EV_IN_MODIFY_OVER, IN_MODIFY)             \
-    XXX(InotifyEvent::EV_IN_ATTRIB, IN_ATTRIB)                  \
     XXX(InotifyEvent::EV_IN_CLOSE_WRITE, IN_CLOSE_WRITE)        \
-    XXX(InotifyEvent::EV_IN_CLOSE_NOWRITE, IN_CLOSE_NOWRITE)    \
-    XXX(InotifyEvent::EV_IN_OPEN, IN_OPEN)                      \
     XXX(InotifyEvent::EV_IN_MOVED_OUT, IN_MOVED_FROM)           \
     XXX(InotifyEvent::EV_IN_MOVED_IN, IN_MOVED_TO)              \
     XXX(InotifyEvent::EV_IN_CREATE, IN_CREATE)                  \
@@ -341,12 +337,8 @@ uint32_t InotifyTool::realInotifyEv2InotifyEvent(uint32_t ev) const noexcept
     uint32_t inotifyEv = InotifyEvent::EV_IN_NONE;
 
 #define INOTIFY_MAP(XXX)                                        \
-    XXX(InotifyEvent::EV_IN_ACCESS, IN_ACCESS)                  \
     XXX(InotifyEvent::EV_IN_MODIFY_OVER, IN_MODIFY)             \
-    XXX(InotifyEvent::EV_IN_ATTRIB, IN_ATTRIB)                  \
     XXX(InotifyEvent::EV_IN_CLOSE_WRITE, IN_CLOSE_WRITE)        \
-    XXX(InotifyEvent::EV_IN_CLOSE_NOWRITE, IN_CLOSE_NOWRITE)    \
-    XXX(InotifyEvent::EV_IN_OPEN, IN_OPEN)                      \
     XXX(InotifyEvent::EV_IN_MOVED_OUT, IN_MOVED_FROM)           \
     XXX(InotifyEvent::EV_IN_MOVED_IN, IN_MOVED_TO)              \
     XXX(InotifyEvent::EV_IN_CREATE, IN_CREATE)                  \
@@ -788,12 +780,8 @@ std::string Event2String(uint32_t ev)
     std::stringstream ss;
 
 #define INOTIFY_MAP(XXX)                                        \
-    XXX(InotifyEvent::EV_IN_ACCESS, IN_ACCESS)                  \
     XXX(InotifyEvent::EV_IN_MODIFY_OVER, IN_MODIFY)             \
-    XXX(InotifyEvent::EV_IN_ATTRIB, IN_ATTRIB)                  \
     XXX(InotifyEvent::EV_IN_CLOSE_WRITE, IN_CLOSE_WRITE)        \
-    XXX(InotifyEvent::EV_IN_CLOSE_NOWRITE, IN_CLOSE_NOWRITE)    \
-    XXX(InotifyEvent::EV_IN_OPEN, IN_OPEN)                      \
     XXX(InotifyEvent::EV_IN_MOVED_OUT, IN_MOVED_FROM)           \
     XXX(InotifyEvent::EV_IN_MOVED_IN, IN_MOVED_TO)              \
     XXX(InotifyEvent::EV_IN_CREATE, IN_CREATE)                  \
