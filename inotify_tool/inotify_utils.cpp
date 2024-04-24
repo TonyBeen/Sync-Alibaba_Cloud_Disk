@@ -32,6 +32,16 @@ void CorrectionPath(std::string &item)
 #endif
 }
 
+void StringReplace(std::string &opStr, const std::string &from, const std::string &to)
+{
+    size_t pos = 0;
+    pos = opStr.find(from);
+    if (pos != std::string::npos)
+    {
+        opStr.replace(pos, from.length(), to);
+    }
+}
+
 } // namespace utils
 } // namespace eular
 

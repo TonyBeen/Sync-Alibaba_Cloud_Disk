@@ -15,14 +15,13 @@
 #include <memory>
 
 #include <utils/bimap.h>
+#include <utils/buffer.h>
 
 #define U32_BITS (sizeof(uint32_t) * __CHAR_BIT__)
 
 struct inotify_event;
 struct InotifyEventItem;
 struct InotifyInfo;
-template<>
-struct std::hash<InotifyInfo>;
 
 #include "inotify_tool/inotify_tool_p.h"
 
@@ -107,7 +106,7 @@ public:
      * 
      * @param eventItemVec 
      */
-    void getEventItem(std::vector<InotifyEventItem> &eventItemVec);
+    void getEventItem(std::list<InotifyEventItem> &eventItemVec);
 
     /**
      * @brief 获取错误码
@@ -169,16 +168,17 @@ protected:
     bool _watchRecursive(std::list<std::pair<std::string, InotifyInfo>> &infoList,
                          const std::string &path, uint32_t ev);
 
-    void _parseEvent(inotify_event *pInotifyEv);
+    void _parseEvent(ByteBuffer &inotifyEventBuf);
 
     void _disassembleU32(uint32_t flag, uint32_t vec[U32_BITS]);
 
 private:
-    bool            m_recursion;    // 是否递归监控子目录
-    int32_t         m_inotifyFd;    // Inotify文件描述符
-    int32_t         m_errorCode;    // 错误码
-    std::vector<InotifyEventItem>   m_eventItemVec; // 事件队列
-    BiMap<std::string, InotifyInfo> m_pathWithWd;   // 目录/文件和wd句柄的双向映射
+    bool            m_recursion;     // 是否递归监控子目录
+    int32_t         m_inotifyFd;     // Inotify文件描述符
+    int32_t         m_errorCode;     // 错误码
+    ByteBuffer      m_inotifyBuffer; // inotify缓冲区
+    std::list<InotifyEventItem>     m_eventItemVec; // 事件队列
+    BiMap<InotifyInfo, std::string> m_pathWithWd;   // 目录/文件和wd句柄的双向映射
 };
 
 } // namespace eular

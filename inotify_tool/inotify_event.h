@@ -15,7 +15,7 @@
 #define EV_IN_MOVE (InotifyEvent::EV_IN_MOVED_OUT | InotifyEvent::EV_IN_MOVED_IN)
 #define EV_IN_ALL (                     \
     InotifyEvent::EV_IN_ACCESS |        \
-    InotifyEvent::EV_IN_MODIFY |        \
+    InotifyEvent::EV_IN_MODIFY_OVER |   \
     InotifyEvent::EV_IN_ATTRIB |        \
     InotifyEvent::EV_IN_CLOSE_WRITE |   \
     InotifyEvent::EV_IN_CLOSE_NOWRITE | \
@@ -29,7 +29,7 @@
 enum InotifyEvent {
     EV_IN_NONE              = 0x00,         // 无事件
     EV_IN_ACCESS            = 0x01,         // 文件或目录被访问
-    EV_IN_MODIFY            = 0x02,         // 文件被修改, 例如write, truncate
+    EV_IN_MODIFY_OVER       = 0x02,         // 文件被修改, 例如write, truncate
     EV_IN_ATTRIB            = 0x04,         // 属性被修改, 例如权限(chmod), 扩展属性(setxattr)
     EV_IN_CLOSE_WRITE       = 0x08,         // 关闭以写方式打开的文件
     EV_IN_CLOSE_NOWRITE     = 0x10,         // 关闭以读方式打开的文件
@@ -40,6 +40,7 @@ enum InotifyEvent {
     EV_IN_DELETE            = 0x200,        // 文件或目录从监视目录中删除
 
     // 特殊标志, 无需主动带上
+    EV_IN_ERROR             = 0x1000,       // 处理事件过程中出现问题
     EV_IN_UNMOUNT           = 0x2000,       // 监视的目录被卸载
     EV_IN_IGNORED           = 0x8000,       // 监视的文件/目录已被删除
     EV_IN_ISDIR             = 0x40000000,   // 操作的是个目录
@@ -47,9 +48,9 @@ enum InotifyEvent {
 
 struct InotifyEventItem
 {
-    uint32_t        event;  // 产生的事件
-    uint32_t        cookie; // 关联两个事件
-    std::string     name;   // 发生事件的名称
+    uint32_t        event = 0;  // 产生的事件
+    uint32_t        cookie = 0; // 关联两个事件
+    std::string     name;       // 发生事件的名称
 };
 
 

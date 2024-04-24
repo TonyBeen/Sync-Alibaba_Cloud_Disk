@@ -17,19 +17,29 @@ struct InotifyInfo
     uint32_t ev;    // 事件
     bool recursion; // 是否递归监视子目录, 只对目录有效
 
+    bool operator<(const InotifyInfo& other) const
+    {
+        return (wd < other.wd);
+    }
+
+    bool operator>(const InotifyInfo& other) const
+    {
+        return (wd > other.wd);
+    }
+
     bool operator==(const InotifyInfo& other) const
     {
         return (wd == other.wd);
     }
 };
 
-template<>
-struct std::hash<InotifyInfo> : public std::__hash_base<size_t, InotifyInfo>
-{
-    size_t operator()(InotifyInfo val) const noexcept
-    {
-        return static_cast<size_t>(val.wd);
-    }
-};
+// template<>
+// struct std::hash<InotifyInfo> : public std::__hash_base<size_t, InotifyInfo>
+// {
+//     size_t operator()(InotifyInfo val) const noexcept
+//     {
+//         return static_cast<size_t>(val.wd);
+//     }
+// };
 
 #endif // __INOTIFY_TOOL_P_H__

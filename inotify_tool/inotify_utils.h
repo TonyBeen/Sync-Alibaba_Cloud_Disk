@@ -15,6 +15,14 @@ namespace utils {
 
 void CorrectionPath(std::string &item);
 
+/**
+ * @brief 修改opStr, 将from替换为to
+ * 
+ * @param opStr 
+ * @param from 
+ * @param to 
+ */
+void StringReplace(std::string &opStr, const std::string &from, const std::string &to);
 
 } // namespace utils
 } // namespace eular

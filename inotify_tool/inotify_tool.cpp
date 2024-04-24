@@ -9,6 +9,7 @@
 
 #include <utils/sysdef.h>
 #include <utils/errors.h>
+#include <utils/buffer.h>
 #include <log/log.h>
 
 #ifdef OS_LINUX
@@ -19,7 +20,8 @@
 #include <sys/select.h>
 
 #define INOTIFY_EVENT_SIZE  (sizeof(struct inotify_event))
-#define MAX_BUF_SIZE 8192
+#define MAX_BUF_SIZE (1024 * INOTIFY_EVENT_SIZE)
+
 #define INOTIFY_PROCDIR "/proc/sys/fs/inotify/"
 #define WATCHES_SIZE_PATH INOTIFY_PROCDIR "max_user_watches"
 #define QUEUE_SIZE_PATH INOTIFY_PROCDIR "max_queued_watches"
@@ -43,7 +45,8 @@ void DumpInotifyEvent(const struct inotify_event *ev);
 InotifyTool::InotifyTool() noexcept :
     m_recursion(false),
     m_inotifyFd(INVALID_ID),
-    m_errorCode(0)
+    m_errorCode(0),
+    m_inotifyBuffer(MAX_BUF_SIZE)
 {
 }
 
@@ -124,7 +127,7 @@ int32_t InotifyTool::watchFiles(const std::vector<std::string> &fileNames, uint3
 
     for (int32_t i = 0; i < fileNames.size(); ++i)
     {
-        int32_t wd = inotify_add_watch(m_inotifyFd, fileNames[i].c_str(), realEv);
+        int32_t wd = inotify_add_watch(m_inotifyFd, fileNames[i].c_str(), IN_ALL_EVENTS);
         if (INVALID_ID == wd)
         {
             setErrorCode(errno);
@@ -144,7 +147,7 @@ int32_t InotifyTool::watchFiles(const std::vector<std::string> &fileNames, uint3
         {
             filePath.append("/");
         }
-        m_pathWithWd.insert(fileNames[i], info);
+        m_pathWithWd.insert(info, fileNames[i]);
     }
 
     return NO_ERROR;
@@ -193,14 +196,15 @@ int32_t InotifyTool::watchRecursive(const std::vector<std::string> &paths, uint3
     for (int32_t i = 0; i < paths.size(); ++i)
     {
         std::list<std::pair<std::string, InotifyInfo>> infoList;
-        if (!_watchRecursive(infoList, paths[i], realEv))
+        if (!_watchRecursive(infoList, paths[i], ev))
         {
             return UNKNOWN_ERROR;
         }
 
         for (const auto &it : infoList)
         {
-            m_pathWithWd.insert(it.first, it.second);
+            m_pathWithWd.insert(it.second, it.first);
+            LOGE("wd: %d, path: %s", it.second.wd, it.first.c_str());
         }
     }
 
@@ -246,12 +250,12 @@ int32_t InotifyTool::waitCompleteEvent(uint32_t timeout)
 
     // 等待足够的字节数
     uint32_t bytesToRead = 0;
-    do
-    {
+    do {
         errorCode = ioctl(m_inotifyFd, FIONREAD, &bytesToRead);
     } while (!errorCode && bytesToRead < sizeof(struct inotify_event));
     if (errorCode < 0)
     {
+        LOGE("ioctl(FIONREAD) error. [%d, %s]", errno, strerror(errno));
         setErrorCode(errno);
         return UNKNOWN_ERROR;
     }
@@ -261,9 +265,17 @@ int32_t InotifyTool::waitCompleteEvent(uint32_t timeout)
         ssize_t readSize = ::read(m_inotifyFd, eventBuffer, MAX_BUF_SIZE);
         if (readSize < 0)
         {
-            setErrorCode(errno);
-            return UNKNOWN_ERROR;
+            if (errno != EAGAIN)
+            {
+                setErrorCode(errno);
+                LOGE("read(%d) error. [%d, %s]", m_inotifyFd, errno, strerror(errno));
+                return UNKNOWN_ERROR;
+            }
+
+            break;
         }
+
+        LOGI("read size: %zd", readSize);
 
         // 读到结尾
         if (readSize == 0)
@@ -271,20 +283,14 @@ int32_t InotifyTool::waitCompleteEvent(uint32_t timeout)
             break;
         }
 
-        ssize_t i = 0;
-        while (i < readSize)
-        {
-            struct inotify_event *event = (struct inotify_event *)&eventBuffer[i];
-            DumpInotifyEvent(event);
-
-            i += (INOTIFY_EVENT_SIZE + event->len);
-        }
+        m_inotifyBuffer.append(eventBuffer, readSize);
+        _parseEvent(m_inotifyBuffer);
     } while (true);
 
     return NO_ERROR;
 }
 
-void InotifyTool::getEventItem(std::vector<InotifyEventItem> &eventItemVec)
+void InotifyTool::getEventItem(std::list<InotifyEventItem> &eventItemVec)
 {
     eventItemVec = std::move(m_eventItemVec);
     m_eventItemVec.clear();
@@ -306,7 +312,7 @@ uint32_t InotifyTool::inotifyEvent2RealInotifyEv(uint32_t ev) const noexcept
 
 #define INOTIFY_MAP(XXX)                                        \
     XXX(InotifyEvent::EV_IN_ACCESS, IN_ACCESS)                  \
-    XXX(InotifyEvent::EV_IN_MODIFY, IN_MODIFY)                  \
+    XXX(InotifyEvent::EV_IN_MODIFY_OVER, IN_MODIFY)             \
     XXX(InotifyEvent::EV_IN_ATTRIB, IN_ATTRIB)                  \
     XXX(InotifyEvent::EV_IN_CLOSE_WRITE, IN_CLOSE_WRITE)        \
     XXX(InotifyEvent::EV_IN_CLOSE_NOWRITE, IN_CLOSE_NOWRITE)    \
@@ -336,7 +342,7 @@ uint32_t InotifyTool::realInotifyEv2InotifyEvent(uint32_t ev) const noexcept
 
 #define INOTIFY_MAP(XXX)                                        \
     XXX(InotifyEvent::EV_IN_ACCESS, IN_ACCESS)                  \
-    XXX(InotifyEvent::EV_IN_MODIFY, IN_MODIFY)                  \
+    XXX(InotifyEvent::EV_IN_MODIFY_OVER, IN_MODIFY)             \
     XXX(InotifyEvent::EV_IN_ATTRIB, IN_ATTRIB)                  \
     XXX(InotifyEvent::EV_IN_CLOSE_WRITE, IN_CLOSE_WRITE)        \
     XXX(InotifyEvent::EV_IN_CLOSE_NOWRITE, IN_CLOSE_NOWRITE)    \
@@ -371,7 +377,7 @@ bool InotifyTool::isDir(const std::string &path) const
     {
         if (errno != ENOENT)
         {
-            LOGD("Stat failed on %s: %s\n", path, strerror(errno));
+            LOGW("Stat failed on %s: %s\n", path, strerror(errno));
         }
 
         return false;
@@ -390,7 +396,7 @@ bool InotifyTool::_watchRecursive(std::list<std::pair<std::string, InotifyInfo>>
     std::string fixedPath = path;
     utils::CorrectionPath(fixedPath);
 
-    int32_t wd = inotify_add_watch(m_inotifyFd, fixedPath.c_str(), ev);
+    int32_t wd = inotify_add_watch(m_inotifyFd, fixedPath.c_str(), IN_ALL_EVENTS);
     if (INVALID_ID == wd)
     {
         return false;
@@ -450,6 +456,295 @@ bool InotifyTool::_watchRecursive(std::list<std::pair<std::string, InotifyInfo>>
     return true;
 }
 
+void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
+{
+    // IN_MOVED_FROM事件中的文件/目录名
+    const char *pMoveOut = nullptr;
+    // IN_MOVED_FROM事件是对目录还是文件的操作
+    bool moveOutItemIsDirFlag = false;
+    // IN_MOVED_FROM事件的cookie
+    uint32_t eventCookie = 0;
+
+    bool modifyFlag = false;
+    int32_t movedSelfWd = 0;
+
+    const struct inotify_event *pInoEvent = nullptr;
+
+    size_t i = 0;
+    // NOTE 未防止因read读取到不完整inotify_event产生越界行为, 需要在for条件中判断是否完整结构体
+    for (; i < inotifyEventBuf.size() && (i + INOTIFY_EVENT_SIZE) < inotifyEventBuf.size(); i += (INOTIFY_EVENT_SIZE + pInoEvent->len))
+    {
+        pInoEvent = (const struct inotify_event *)(inotifyEventBuf.const_data() + i);
+
+        DumpInotifyEvent(pInoEvent);
+
+        InotifyEventItem eventItem;
+        InotifyInfo evTemp = {pInoEvent->wd, 0, false};
+
+        if (pInoEvent->mask & IN_Q_OVERFLOW)
+        {
+            eventItem.cookie = pInoEvent->cookie;
+            eventItem.event = pInoEvent->mask;
+            m_eventItemVec.push_back(eventItem);
+
+            continue;
+        }
+
+        if (pInoEvent->mask & IN_DELETE_SELF)
+        {
+            // 监视目录被删除需要解除监视并从映射表中移除
+            LOGW("erase wd: %d for IN_DELETE_SELF", pInoEvent->wd);
+            inotify_rm_watch(m_inotifyFd, pInoEvent->wd);
+            continue;
+        }
+
+        // 监视已显式删除(inotify_rm_Watch)或自动删除(文件已删除或文件系统已卸载)
+        if (pInoEvent->mask & IN_IGNORED)
+        {
+            LOGI("wd: %d Trigger IN_IGNORED event", pInoEvent->wd);
+            m_pathWithWd.erase(evTemp);
+            continue;
+        }
+
+        auto it = m_pathWithWd.find(evTemp);
+        if (it == m_pathWithWd.end())
+        {
+            LOGE("-----------------------------------------------------------------");
+            for (auto it = m_pathWithWd.begin(); it != m_pathWithWd.end(); ++it)
+            {
+                LOGD("wd: %d, path: %s", it.key().wd, it.value().c_str());
+            }
+            LOGE("-----------------------------------------------------------------");
+        }
+        // TODO 当从双向映射容器找不到wd时, 表示wd未插入到容器或未移除监视的情况下删除
+        LOG_ASSERT(it != m_pathWithWd.end(), "wd(%d) not found", pInoEvent->wd);
+
+        // 当前目录是否递归
+        bool recursionFlag = it.key().recursion;
+
+        // 当前操作的事件是否目录
+        bool isDirFlag = false;
+
+        // 监视目录取消挂载或被删除
+        if (pInoEvent->mask & IN_UNMOUNT)
+        {
+            eventItem.cookie = pInoEvent->cookie;
+            eventItem.event = pInoEvent->mask;
+            std::string deletedItem;
+            if (pInoEvent->len > 0)
+            {
+                deletedItem = pInoEvent->name;
+            }
+            eventItem.name = it.value() + deletedItem;
+            m_eventItemVec.push_back(eventItem);
+
+            // 卸载磁盘或自身被删除需要解除监视
+            LOGW("erase wd: %d for IN_UNMOUNT", pInoEvent->wd);
+            inotify_rm_watch(m_inotifyFd, pInoEvent->wd);
+            m_pathWithWd.erase(it);
+
+            continue;
+        }
+
+        if (pInoEvent->len == 0)
+        {
+            // 无意义的事件
+            continue;
+        }
+
+        // 表示当前是个目录
+        if (pInoEvent->mask & IN_ISDIR)
+        {
+            isDirFlag = true;
+            eventItem.event |= EV_IN_ISDIR;
+        }
+
+        if (pInoEvent->mask & IN_DELETE)
+        {
+            eventItem.cookie = pInoEvent->cookie;
+            eventItem.event |= EV_IN_DELETE;
+            eventItem.name = it.value() + pInoEvent->name;
+            m_eventItemVec.push_back(eventItem);
+
+            continue;
+        }
+
+        // 文件/目录被创建
+        if (pInoEvent->mask & IN_CREATE)
+        {
+            // 如果新建文件是目录, 并且当前父目录递归监视, 则将此目录加入到监视中
+            if (isDirFlag && it.key().recursion)
+            {
+                uint32_t mask = EV_IN_ERROR;
+                std::list<std::pair<std::string, InotifyInfo>> infoList;
+                if (_watchRecursive(infoList, it.value() + pInoEvent->name, it.key().ev))
+                {
+                    for (const auto &it : infoList)
+                    {
+                        m_pathWithWd.insert(it.second, it.first);
+                    }
+
+                    mask = 0;
+                }
+
+                eventItem.event |= mask;
+            }
+
+            eventItem.cookie = pInoEvent->cookie;
+            eventItem.event |= EV_IN_CREATE;
+            eventItem.name = it.value() + pInoEvent->name;
+            m_eventItemVec.push_back(eventItem);
+
+            continue;
+        }
+
+        // 文件被修改
+        if (pInoEvent->mask & IN_MODIFY)
+        {
+            modifyFlag = true;
+            continue;
+        }
+
+        // 修改完毕, 将修改事件压入队列
+        if ((pInoEvent->mask & IN_CLOSE_WRITE) && modifyFlag)
+        {
+            modifyFlag = false;
+
+            eventItem.cookie = pInoEvent->cookie;
+            eventItem.event |= EV_IN_MODIFY_OVER;
+            eventItem.name = it.value() + pInoEvent->name;
+            m_eventItemVec.push_back(eventItem);
+
+            continue;
+        }
+
+        // 文件或目录被移动到其他位置
+        if (pInoEvent->mask & IN_MOVED_FROM)
+        {
+            moveOutItemIsDirFlag = isDirFlag;
+            pMoveOut = pInoEvent->name;
+            eventCookie = pInoEvent->cookie;
+
+            eventItem.cookie = pInoEvent->cookie;
+            eventItem.event |= EV_IN_MOVED_OUT;
+            eventItem.name = it.value() + pInoEvent->name;
+            m_eventItemVec.push_back(eventItem);
+
+            // NOTE 考虑到对目录重命名会产生IN_MOVED_FROM事件, 故不在此处进行inotify的删除wd操作
+            continue;
+        }
+
+        // 文件或目录从其他位置移动到被监视目录
+        if (pInoEvent->mask & IN_MOVED_TO)
+        {
+            std::string parentPath = it.value();
+            const char *pMoveIn = pInoEvent->name;
+
+            // 对目录的重名操作, 需要更新旧的值
+            if (eventCookie == pInoEvent->cookie && pMoveOut != nullptr && moveOutItemIsDirFlag)
+            {
+                auto tempBiMap = m_pathWithWd;
+
+                for (auto bimapIt = tempBiMap.begin(); bimapIt != tempBiMap.end(); ++bimapIt)
+                {
+                    std::string moveOutPath = parentPath + pMoveOut;
+                    if (std::string::npos != bimapIt.value().find(moveOutPath))
+                    {
+                        std::string oldPath = bimapIt.value();
+                        utils::StringReplace(oldPath, moveOutPath, parentPath + pMoveIn);
+                        bimapIt.update(oldPath);
+                        continue;
+                    }
+                }
+
+                m_pathWithWd = std::move(tempBiMap);
+
+                pMoveOut = nullptr;
+                moveOutItemIsDirFlag = false;
+            }
+            else if (isDirFlag)
+            {
+                InotifyInfo info = it.key();
+                // 目录从其他位置移动到此处
+                if (info.recursion)
+                {
+                    std::list<std::pair<std::string, InotifyInfo>> infoList;
+                    if (_watchRecursive(infoList, parentPath + pMoveIn, info.ev))
+                    {
+                        for (const auto &it : infoList)
+                        {
+                            m_pathWithWd.insert(it.second, it.first);
+                        }
+                    }
+                    else
+                    {
+                        eventItem.event |= EV_IN_ERROR;
+                    }
+                }
+                else
+                {
+                    watchFile(parentPath + pMoveIn, info.ev);
+                }
+            }
+
+            eventItem.cookie = pInoEvent->cookie;
+            eventItem.event |= EV_IN_MOVED_IN;
+            eventItem.name = parentPath + pMoveIn;
+            m_eventItemVec.push_back(eventItem);
+        }
+
+        // 有IN_MOVED_FROM而没有IN_MOVED_TO事件
+        if (pMoveOut != nullptr && moveOutItemIsDirFlag)
+        {
+            auto tempBiMap = m_pathWithWd;
+
+            // 目录被移走, 则停止监视目录
+            std::string path = it.value() + pMoveOut;
+            for (auto bimapIt = tempBiMap.begin(); bimapIt != tempBiMap.end(); )
+            {
+                if (bimapIt.value().find(path))
+                {
+                    inotify_rm_watch(m_inotifyFd, bimapIt.key().wd);
+                    bimapIt = tempBiMap.erase(bimapIt);
+                    continue;
+                }
+
+                ++bimapIt;
+            }
+
+            m_pathWithWd = std::move(tempBiMap);
+            // NOTE 此时迭代器it已失效, 无法继续使用
+
+            pMoveOut = nullptr;
+            moveOutItemIsDirFlag = false;
+        }
+    }
+
+    // 保留剩余数据
+    if (i < inotifyEventBuf.size())
+    {
+        const uint8_t *pBegin = inotifyEventBuf.const_data() + i;
+        size_t copySize = inotifyEventBuf.size() - i;
+        inotifyEventBuf.set(pBegin, copySize);
+    }
+    else
+    {
+        inotifyEventBuf.clear();
+    }
+}
+
+void InotifyTool::_disassembleU32(uint32_t flag, uint32_t vec[U32_BITS])
+{
+    for (int32_t i = 0; i < 32; ++i)
+    {
+        uint32_t temp = 0x01 << i;
+        if (flag & temp)
+        {
+            vec[i] = temp;
+        }
+    }
+}
+
 void DumpInotifyEvent(const struct inotify_event *ev)
 {
     std::string opTotal = "";
@@ -482,28 +777,8 @@ void DumpInotifyEvent(const struct inotify_event *ev)
     if (ev->mask & IN_ONESHOT)          opTotal += "IN_ONESHOT | ";
 
     std::string temp(opTotal.c_str(), opTotal.length() - 3);
-    if (ev->len > 0)
-    {
-        LOGD("wd: %d, mask: %#x(%s), cookie: %#x, len: %u, name: %s\n",
-            ev->wd, ev->mask, temp.c_str(), ev->cookie, ev->len, ev->len > 0 ? ev->name : "(null)");
-    }
-}
-
-void InotifyTool::_parseEvent(inotify_event *pInotifyEv)
-{
-
-}
-
-void InotifyTool::_disassembleU32(uint32_t flag, uint32_t vec[U32_BITS])
-{
-    for (int32_t i = 0; i < 32; ++i)
-    {
-        uint32_t temp = 0x01 << i;
-        if (flag & temp)
-        {
-            vec[i] = temp;
-        }
-    }
+    LOGD("wd: %d, mask: %#x(%s), cookie: %#x, len: %u, name: %s\n",
+        ev->wd, ev->mask, temp.c_str(), ev->cookie, ev->len, ev->len > 0 ? ev->name : "(null)");
 }
 
 } // namespace eular
@@ -514,7 +789,7 @@ std::string Event2String(uint32_t ev)
 
 #define INOTIFY_MAP(XXX)                                        \
     XXX(InotifyEvent::EV_IN_ACCESS, IN_ACCESS)                  \
-    XXX(InotifyEvent::EV_IN_MODIFY, IN_MODIFY)                  \
+    XXX(InotifyEvent::EV_IN_MODIFY_OVER, IN_MODIFY)             \
     XXX(InotifyEvent::EV_IN_ATTRIB, IN_ATTRIB)                  \
     XXX(InotifyEvent::EV_IN_CLOSE_WRITE, IN_CLOSE_WRITE)        \
     XXX(InotifyEvent::EV_IN_CLOSE_NOWRITE, IN_CLOSE_NOWRITE)    \
@@ -523,6 +798,7 @@ std::string Event2String(uint32_t ev)
     XXX(InotifyEvent::EV_IN_MOVED_IN, IN_MOVED_TO)              \
     XXX(InotifyEvent::EV_IN_CREATE, IN_CREATE)                  \
     XXX(InotifyEvent::EV_IN_DELETE, IN_DELETE)                  \
+    XXX(InotifyEvent::EV_IN_ERROR, IN_ONESHOT)                  \
     XXX(InotifyEvent::EV_IN_UNMOUNT, IN_UNMOUNT)                \
     XXX(InotifyEvent::EV_IN_IGNORED, IN_IGNORED)                \
     XXX(InotifyEvent::EV_IN_ISDIR, IN_ISDIR)                    \
