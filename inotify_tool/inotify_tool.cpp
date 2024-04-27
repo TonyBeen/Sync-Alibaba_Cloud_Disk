@@ -292,8 +292,8 @@ int32_t InotifyTool::waitCompleteEvent(uint32_t timeout)
 
 void InotifyTool::getEventItem(std::list<InotifyEventItem> &eventItemVec)
 {
-    eventItemVec = std::move(m_eventItemVec);
-    m_eventItemVec.clear();
+    eventItemVec = std::move(m_eventItemQueue);
+    m_eventItemQueue.clear();
 }
 
 int32_t InotifyTool::getLastError()
@@ -457,7 +457,6 @@ void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
     // IN_MOVED_FROM事件的cookie
     uint32_t eventCookie = 0;
 
-    bool modifyFlag = false;
     int32_t movedSelfWd = 0;
 
     const struct inotify_event *pInoEvent = nullptr;
@@ -477,7 +476,7 @@ void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
         {
             eventItem.cookie = pInoEvent->cookie;
             eventItem.event = pInoEvent->mask;
-            m_eventItemVec.push_back(eventItem);
+            m_eventItemQueue.push_back(eventItem);
 
             continue;
         }
@@ -528,7 +527,7 @@ void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
                 deletedItem = pInoEvent->name;
             }
             eventItem.name = it.value() + deletedItem;
-            m_eventItemVec.push_back(eventItem);
+            m_eventItemQueue.push_back(eventItem);
 
             // 卸载磁盘或自身被删除需要解除监视
             LOGW("erase wd: %d for IN_UNMOUNT", pInoEvent->wd);
@@ -556,7 +555,7 @@ void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
             eventItem.cookie = pInoEvent->cookie;
             eventItem.event |= EV_IN_DELETE;
             eventItem.name = it.value() + pInoEvent->name;
-            m_eventItemVec.push_back(eventItem);
+            m_eventItemQueue.push_back(eventItem);
 
             continue;
         }
@@ -585,7 +584,7 @@ void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
             eventItem.cookie = pInoEvent->cookie;
             eventItem.event |= EV_IN_CREATE;
             eventItem.name = it.value() + pInoEvent->name;
-            m_eventItemVec.push_back(eventItem);
+            m_eventItemQueue.push_back(eventItem);
 
             continue;
         }
@@ -593,19 +592,32 @@ void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
         // 文件被修改
         if (pInoEvent->mask & IN_MODIFY)
         {
-            modifyFlag = true;
+            std::string filePath = it.value() + pInoEvent->name;
+            auto modifyIt = m_fileModifySet.find(filePath);
+            if (modifyIt == m_fileModifySet.end())
+            {
+                // 多次修改只记录一次
+                m_fileModifySet.insert(filePath);
+            }
+
             continue;
         }
 
         // 修改完毕, 将修改事件压入队列
-        if ((pInoEvent->mask & IN_CLOSE_WRITE) && modifyFlag)
+        if ((pInoEvent->mask & IN_CLOSE_WRITE))
         {
-            modifyFlag = false;
+            std::string filePath = it.value() + pInoEvent->name;
+            auto modifyIt = m_fileModifySet.find(filePath);
+            // 如果等于end表示文件以写方式打开, 但是并未修改文件后关闭
+            if (modifyIt != m_fileModifySet.end())
+            {
+                eventItem.cookie = pInoEvent->cookie;
+                eventItem.event |= EV_IN_MODIFY_OVER;
+                eventItem.name = filePath;
+                m_eventItemQueue.push_back(eventItem);
 
-            eventItem.cookie = pInoEvent->cookie;
-            eventItem.event |= EV_IN_MODIFY_OVER;
-            eventItem.name = it.value() + pInoEvent->name;
-            m_eventItemVec.push_back(eventItem);
+                m_fileModifySet.erase(modifyIt);
+            }
 
             continue;
         }
@@ -620,7 +632,7 @@ void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
             eventItem.cookie = pInoEvent->cookie;
             eventItem.event |= EV_IN_MOVED_OUT;
             eventItem.name = it.value() + pInoEvent->name;
-            m_eventItemVec.push_back(eventItem);
+            m_eventItemQueue.push_back(eventItem);
 
             // NOTE 考虑到对目录重命名会产生IN_MOVED_FROM事件, 故不在此处进行inotify的删除wd操作
             continue;
@@ -682,9 +694,10 @@ void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
             eventItem.cookie = pInoEvent->cookie;
             eventItem.event |= EV_IN_MOVED_IN;
             eventItem.name = parentPath + pMoveIn;
-            m_eventItemVec.push_back(eventItem);
+            m_eventItemQueue.push_back(eventItem);
         }
 
+        // NOTE IN_MOVED_FROM和IN_MOVED_TO是连续事件, 中间不会被其他事件隔开
         // 有IN_MOVED_FROM而没有IN_MOVED_TO事件
         if (pMoveOut != nullptr && moveOutItemIsDirFlag)
         {

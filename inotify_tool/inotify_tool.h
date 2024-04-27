@@ -11,6 +11,7 @@
 #include <string>
 #include <list>
 #include <vector>
+#include <set>
 #include <map>
 #include <memory>
 
@@ -177,8 +178,9 @@ private:
     int32_t         m_inotifyFd;     // Inotify文件描述符
     int32_t         m_errorCode;     // 错误码
     ByteBuffer      m_inotifyBuffer; // inotify缓冲区
-    std::list<InotifyEventItem>     m_eventItemVec; // 事件队列
-    BiMap<InotifyInfo, std::string> m_pathWithWd;   // 目录/文件和wd句柄的双向映射
+    std::list<InotifyEventItem>     m_eventItemQueue; // 事件队列
+    std::set<std::string>           m_fileModifySet;  // 文件被修改集合
+    BiMap<InotifyInfo, std::string> m_pathWithWd;     // 目录/文件和wd句柄的双向映射
 };
 
 } // namespace eular
