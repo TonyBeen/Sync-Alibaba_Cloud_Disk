@@ -738,17 +738,17 @@ void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
     }
 }
 
-void InotifyTool::_disassembleU32(uint32_t flag, uint32_t vec[U32_BITS])
-{
-    for (int32_t i = 0; i < 32; ++i)
-    {
-        uint32_t temp = 0x01 << i;
-        if (flag & temp)
-        {
-            vec[i] = temp;
-        }
-    }
-}
+// void InotifyTool::_disassembleU32(uint32_t flag, uint32_t vec[U32_BITS])
+// {
+//     for (int32_t i = 0; i < 32; ++i)
+//     {
+//         uint32_t temp = 0x01 << i;
+//         if (flag & temp)
+//         {
+//             vec[i] = temp;
+//         }
+//     }
+// }
 
 void DumpInotifyEvent(const struct inotify_event *ev)
 {

@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
     while (true)
     {
         int32_t errorCode = spInotifyTool->waitCompleteEvent(0);
-        if (errorCode != eular::NO_ERROR)
+        if (errorCode != NO_ERROR)
         {
             perror("waitCompleteEvent error");
             continue;

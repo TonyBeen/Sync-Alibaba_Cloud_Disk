@@ -18,13 +18,11 @@
 #include <utils/bimap.h>
 #include <utils/buffer.h>
 
+#include "inotify_tool/inotify_tool_p.h"
+
 #define U32_BITS (sizeof(uint32_t) * __CHAR_BIT__)
 
-struct inotify_event;
 struct InotifyEventItem;
-struct InotifyInfo;
-
-#include "inotify_tool/inotify_tool_p.h"
 
 namespace eular {
 
@@ -170,8 +168,6 @@ protected:
                          const std::string &path, uint32_t ev);
 
     void _parseEvent(ByteBuffer &inotifyEventBuf);
-
-    void _disassembleU32(uint32_t flag, uint32_t vec[U32_BITS]);
 
 private:
     bool            m_recursion;     // 是否递归监控子目录
