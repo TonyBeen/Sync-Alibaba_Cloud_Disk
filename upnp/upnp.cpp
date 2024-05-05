@@ -30,12 +30,12 @@ static void DisplayInfos(struct UPNPUrls *urls, struct IGDdatas *data)
     if (UPNP_GetConnectionTypeInfo(urls->controlURL,
                                    data->first.servicetype,
                                    connectionType) != UPNPCOMMAND_SUCCESS)
-        LOGI("GetConnectionTypeInfo failed.\n");
+        LOGE("GetConnectionTypeInfo failed.\n");
     else
         LOGI("Connection Type : %s\n", connectionType);
     if (UPNP_GetStatusInfo(urls->controlURL, data->first.servicetype,
                            status, &uptime, lastconnerr) != UPNPCOMMAND_SUCCESS)
-        LOGI("GetStatusInfo failed.\n");
+        LOGE("GetStatusInfo failed.\n");
     else
         LOGI("Status : %s, uptime=%us, LastConnectionError : %s\n", status, uptime, lastconnerr);
     if (uptime > 0)
@@ -47,27 +47,28 @@ static void DisplayInfos(struct UPNPUrls *urls, struct IGDdatas *data)
     if (UPNP_GetLinkLayerMaxBitRates(urls->controlURL_CIF, data->CIF.servicetype,
                                      &brDown, &brUp) != UPNPCOMMAND_SUCCESS)
     {
-        LOGI("GetLinkLayerMaxBitRates failed.\n");
+        LOGE("GetLinkLayerMaxBitRates failed.\n");
     }
     else
     {
         LOGI("MaxBitRateDown : %u bps", brDown);
         if (brDown >= 1000000)
         {
-            LOGI(" (%u.%u Mbps)", brDown / 1000000, (brDown / 100000) % 10);
+            LOGI("  (%u.%u Mbps)", brDown / 1000000, (brDown / 100000) % 10);
         }
         else if (brDown >= 1000)
         {
-            LOGI(" (%u Kbps)", brDown / 1000);
+            LOGI("  (%u Kbps)", brDown / 1000);
         }
+
         LOGI("   MaxBitRateUp %u bps", brUp);
         if (brUp >= 1000000)
         {
-            LOGI(" (%u.%u Mbps)", brUp / 1000000, (brUp / 100000) % 10);
+            LOGI("  (%u.%u Mbps)", brUp / 1000000, (brUp / 100000) % 10);
         }
         else if (brUp >= 1000)
         {
-            LOGI(" (%u Kbps)", brUp / 1000);
+            LOGI("  (%u Kbps)", brUp / 1000);
         }
         LOGI("\n");
     }
@@ -76,11 +77,11 @@ static void DisplayInfos(struct UPNPUrls *urls, struct IGDdatas *data)
                                   externalIPAddress);
     if (r != UPNPCOMMAND_SUCCESS)
     {
-        LOGI("GetExternalIPAddress failed. (errorcode=%d)\n", r);
+        LOGE("GetExternalIPAddress failed. (errorcode=%d)\n", r);
     }
     else if (!externalIPAddress[0])
     {
-        LOGI("GetExternalIPAddress failed. (empty string)\n");
+        LOGE("GetExternalIPAddress failed. (empty string)\n");
     }
     else
     {
@@ -130,7 +131,7 @@ static void ListRedirections(struct UPNPUrls *urls, struct IGDdatas *data)
             Format(i, protocol, extPort, intClient, intPort, desc, rHost, duration);
         } else {
             if (r != 713) {
-                LOGI("GetGenericPortMappingEntry() returned %d (%s)\n", r, strupnperror(r));
+                LOGE("GetGenericPortMappingEntry() returned %d (%s)\n", r, strupnperror(r));
             }
         }
     } while (r == 0 && i++ < 65535);
@@ -154,7 +155,9 @@ void UpnpClient::displayUpnp() const
     LOGI("List of UPNP devices found on the network:\n");
     for (pDevice = upnpDevList; nullptr != pDevice; pDevice = pDevice->pNext)
     {
-        LOGI("    xml url: %s\tdevice type: %s\n\n", pDevice->descURL, pDevice->st);
+        LOGI("    xml url: %s", pDevice->descURL);
+        LOGI("    device type: %s", pDevice->st);
+        LOGI("");
     }
 
     int32_t index = 0;

@@ -12,10 +12,11 @@ foreach(SOURCE_FILE ${SOURCE_FILE_LIST})
     add_executable(${FILE_NAME} ${SOURCE_FILE})
 
     target_include_directories(${FILE_NAME} PUBLIC 
-                                ${ROOT_PATH}
-                                ${INC_PATH})
+                               ${ROOT_PATH}
+                               ${INC_PATH})
     
     target_compile_definitions(${FILE_NAME} PRIVATE NDEBUG)
 
-    target_link_libraries(${FILE_NAME} PRIVATE eular::inotify_tool ${SO_PATH}/liblog.so)
+    # miniupnpc::miniupnpc
+    target_link_libraries(${FILE_NAME} PRIVATE eular::inotify_tool eular::upnpclient utils log pthread)
 endforeach()
