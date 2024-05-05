@@ -13,8 +13,34 @@
 #include "upnperrors.h"
 
 #include <log/log.h>
+#include "upnp.h"
 
 #define LOG_TAG "UPNP"
+
+struct UPNPDeviceInfo
+{
+    UPNPDev*    pDeviceList;
+    UPNPUrls    urls;
+    IGDdatas    data;
+    char        lanAddr[64];
+
+    UPNPDeviceInfo() :
+        pDeviceList(nullptr)
+    {
+        memset(&urls, 0, sizeof(UPNPUrls));
+        memset(&data, 0, sizeof(IGDdatas));
+        memset(lanAddr, 0, sizeof(lanAddr));
+    }
+
+    ~UPNPDeviceInfo()
+    {
+        FreeUPNPUrls(&urls);
+        freeUPNPDevlist(pDeviceList);
+    }
+};
+
+static const char g_protoTCP[4] = {'T', 'C', 'P', 0};
+static const char g_protoUDP[4] = {'U', 'D', 'P', 0};
 
 namespace eular {
 static void DisplayInfos(struct UPNPUrls *urls, struct IGDdatas *data)
@@ -137,7 +163,40 @@ static void ListRedirections(struct UPNPUrls *urls, struct IGDdatas *data)
     } while (r == 0 && i++ < 65535);
 }
 
-void UpnpClient::displayUpnp() const
+bool UPNPClient::hasValidIGD()
+{
+    m_hasValidIGD = false;
+    m_spDevice.reset();
+    m_spDevice = std::make_shared<UPNPDeviceInfo>();
+
+    struct UPNPDev *devList = nullptr;
+    int32_t error = 0;
+    devList = upnpDiscover(100, nullptr, nullptr, 0, 0, 2, &error);
+    if (nullptr == devList) {
+        LOGW("No IGD UPnP Device found on the network!\n");
+        return m_hasValidIGD;
+    }
+
+    m_spDevice->pDeviceList = devList;
+
+    int32_t value = 0;
+    value = UPNP_GetValidIGD(devList, &m_spDevice->urls, &m_spDevice->data,
+                             m_spDevice->lanAddr, sizeof(m_spDevice->lanAddr));
+    if (value < 0) {
+        LOGW("Error calling interface UPNP_GetValidIGD!");
+        return m_hasValidIGD;
+    }
+
+    if (value != 1) {
+        LOGW("No valid IGD device found!");
+        return m_hasValidIGD;
+    }
+
+    m_hasValidIGD = true;
+    return m_hasValidIGD;
+}
+
+void UPNPClient::displayUpnp() const
 {
     int32_t error = 0;
     struct UPNPDev* pDevice;
@@ -146,15 +205,13 @@ void UpnpClient::displayUpnp() const
     char lanaddr[64] = {0};
 
     struct UPNPDev *upnpDevList = upnpDiscover(100, nullptr, nullptr, UPNP_LOCAL_PORT_ANY, 0, 2, &error);
-    if (upnpDevList == nullptr)
-    {
+    if (upnpDevList == nullptr) {
         LOGW("No IGD UPnP Device found on the network!");
         return;
     }
 
     LOGI("List of UPNP devices found on the network:\n");
-    for (pDevice = upnpDevList; nullptr != pDevice; pDevice = pDevice->pNext)
-    {
+    for (pDevice = upnpDevList; nullptr != pDevice; pDevice = pDevice->pNext) {
         LOGI("    xml url: %s", pDevice->descURL);
         LOGI("    device type: %s", pDevice->st);
         LOGI("");
@@ -162,8 +219,7 @@ void UpnpClient::displayUpnp() const
 
     int32_t index = 0;
     index = UPNP_GetValidIGD(upnpDevList, &urls, &data, lanaddr, sizeof(lanaddr));
-    switch (index)
-    {
+    switch (index) {
     case 1:
         LOGI("Found valid IGD : %s\n", urls.controlURL);
         break;
@@ -181,5 +237,110 @@ void UpnpClient::displayUpnp() const
     LOGI("Local LAN ip address : %s\n", lanaddr);
     DisplayInfos(&urls, &data);
     ListRedirections(&urls, &data);
+
+    FreeUPNPUrls(&urls);
+    freeUPNPDevlist(upnpDevList);
 }
+
+bool UPNPClient::addUPNP(const char *localIp, uint16_t localPort,
+                         uint16_t externalPort, uint32_t proto,
+                         uint32_t leaseDuration, const char *description)
+{
+    if (!hasValidIGD()) {
+        LOGE("No valid IGD device found!");
+        return false;
+    }
+
+    if (localIp == nullptr) {
+        return false;
+    }
+
+    const char *pProto = nullptr;
+    if (proto == PROTO_TCP) {
+        pProto = g_protoTCP;
+    } else if (proto == PROTO_UDP) {
+        pProto = g_protoUDP;
+    } else {
+        return false;
+    }
+
+    char externalIPAddress[40] = {0};
+    int32_t errorCode = UPNP_GetExternalIPAddress(m_spDevice->urls.controlURL,
+                                                  m_spDevice->data.first.servicetype,
+                                                  externalIPAddress);
+    if (errorCode != UPNPCOMMAND_SUCCESS) {
+        LOGE("Error calling interface UPNP_GetExternalIPAddress!");
+        return false;
+    }
+    LOGI("External IP Address = %s\n", externalIPAddress);
+
+    char exPort[16] = {0};
+    snprintf(exPort, sizeof(exPort), "%u", externalPort);
+    char lPort[16] = {0};
+    snprintf(lPort, sizeof(lPort), "%u", localPort);
+    char duration[16] = {0};
+    snprintf(duration, sizeof(duration), "%u", leaseDuration);
+
+    errorCode = UPNP_AddPortMapping(m_spDevice->urls.controlURL, m_spDevice->data.first.servicetype,
+                                    exPort, lPort, localIp, description,
+                                    pProto, nullptr, duration);
+    if (errorCode != UPNPCOMMAND_SUCCESS) {
+        LOGE("UPNP_AddPortMapping(%s, %s, %s) failed: %s\n",
+             exPort, lPort, localIp, strupnperror(errorCode));
+        return false;
+    }
+
+    char intClient[40] = {0};
+    char intPort[6] = {0};
+    errorCode = UPNP_GetSpecificPortMappingEntry(m_spDevice->urls.controlURL,
+                                                 m_spDevice->data.first.servicetype,
+                                                 exPort, pProto, nullptr,
+                                                 intClient, intPort, nullptr,
+                                                 nullptr, duration);
+    if (errorCode != UPNPCOMMAND_SUCCESS) {
+        LOGE("UPNP_GetSpecificPortMappingEntry() failed: %s", strupnperror(errorCode));
+        return false;
+    }
+
+    LOGI("InternalIP:Port = %s:%s\n", intClient, intPort);
+    LOGI("external %s:%s %s is redirected to internal %s:%s (duration = %s)",
+         externalIPAddress, exPort, pProto, intClient, intPort, duration);
+
+    return true;
+}
+
+void UPNPClient::delUPNP(uint16_t externalPort, uint32_t proto)
+{
+    if (!hasValidIGD()) {
+        LOGE("No valid IGD device found!");
+        return;
+    }
+
+    const char *pProto = nullptr;
+    if (proto == PROTO_TCP) {
+        pProto = g_protoTCP;
+    } else if (proto == PROTO_UDP) {
+        pProto = g_protoUDP;
+    } else {
+        return;
+    }
+
+    char exPort[8] = {0};
+    snprintf(exPort, sizeof(exPort), "%u", externalPort);
+    int32_t errorCode = UPNP_DeletePortMapping(m_spDevice->urls.controlURL, m_spDevice->data.first.servicetype,
+                                               exPort, pProto, nullptr);
+    if (errorCode != UPNPCOMMAND_SUCCESS) {
+        LOGE("UPNP_DeletePortMapping() failed: %s", strupnperror(errorCode));
+    }
+
+    char externalIPAddress[40] = {0};
+    errorCode = UPNP_GetExternalIPAddress(m_spDevice->urls.controlURL,
+                                          m_spDevice->data.first.servicetype,
+                                          externalIPAddress);
+    if (errorCode != UPNPCOMMAND_SUCCESS) {
+        return;
+    }
+    LOGI("external %s:%s %s is removed.", externalIPAddress, exPort, pProto);
+}
+
 } // namespace eular

@@ -9,8 +9,11 @@
 
 int main(int argc, char **argv)
 {
-    eular::UpnpClient upnp;
+    eular::UPNPClient upnp;
     upnp.displayUpnp();
-   
+
+    upnp.addUPNP("192.168.3.10", 8888, 8888, PROTO_TCP, 60, "test_upnp");
+    upnp.delUPNP(8888, PROTO_TCP);
+
     return 0;
 }
