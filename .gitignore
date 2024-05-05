@@ -33,5 +33,5 @@
 
 config
 build
-instatll
+install
 watched_path

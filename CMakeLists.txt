@@ -9,7 +9,9 @@ set(SO_PATH /usr/local/lib/)
 
 option(BUILD_EXAMPLE "Build example" ON)
 
+add_subdirectory(third_party)
 add_subdirectory(inotify_tool)
+add_subdirectory(upnp)
 # add_subdirectory(src)
 
 if (BUILD_EXAMPLE)
