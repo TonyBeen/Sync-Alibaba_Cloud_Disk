@@ -33,7 +33,9 @@ int main(int argc, char *argv[])
 
     spInotifyTool->createInotify();
 
-    spInotifyTool->watchRecursive(argv[1], EV_IN_ALL);
+    if (NO_ERROR != spInotifyTool->watchRecursive(argv[1], EV_IN_ALL)) {
+        return 0;
+    }
 
     while (true)
     {
