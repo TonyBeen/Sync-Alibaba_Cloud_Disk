@@ -9,6 +9,7 @@
 #define __HTTPD_APPLICATION_H__
 
 #include <stdint.h>
+#include <memory>
 
 namespace eular {
 class YamlReader;

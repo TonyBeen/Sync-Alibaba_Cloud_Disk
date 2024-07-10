@@ -12,4 +12,4 @@ target_include_directories(httpd PUBLIC
 
 target_compile_definitions(httpd PRIVATE NDEBUG)
 
-target_link_libraries(httpd PRIVATE hv utils log)
+target_link_libraries(httpd PRIVATE hv utils log config)

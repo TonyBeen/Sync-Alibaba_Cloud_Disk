@@ -21,9 +21,12 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    char cwd[1024] = {0};
+    getcwd(cwd, sizeof(cwd));
+
     eular::log::InitLog();
     eular::log::EnableLogColor(true);
-    eular::log::SetPath("/home/eular/VSCode/Sync-Alibaba_Cloud_Disk/build/examples/");
+    eular::log::SetPath(cwd);
     eular::log::addOutputNode(eular::LogWrite::FILEOUT);
 
     eular::InotifyTool::SP spInotifyTool = std::make_shared<eular::InotifyTool>();
