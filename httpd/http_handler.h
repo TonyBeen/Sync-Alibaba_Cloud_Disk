@@ -10,6 +10,8 @@
 
 #include <stdint.h>
 
+#include <hv/HttpService.h>
+
 namespace eular {
 class HttpHandler
 {
@@ -17,7 +19,25 @@ public:
     HttpHandler() = default;
     ~HttpHandler() = default;
 
-    static int32_t GetRoot();
+    /**
+     * @brief 校验操作
+     * 
+     * @param req 
+     * @param resp 
+     * @return int32_t 
+     */
+    static int32_t Auth(HttpRequest* req, HttpResponse* resp);
+
+    /**
+     * @brief 默认页面, 登录
+     * 
+     * @param req 
+     * @param resp 
+     * @return int32_t 
+     */
+    static int32_t Login(HttpRequest* req, HttpResponse* resp);
+
+    static int32_t Makefile(HttpRequest *req, HttpResponse *resp);
 };
 
 } // namespace eular
