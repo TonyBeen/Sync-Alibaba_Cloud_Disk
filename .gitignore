@@ -31,7 +31,9 @@
 *.out
 *.app
 
+.vscode
 config
 build
 install
 watched_path
+api

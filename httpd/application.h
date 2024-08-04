@@ -28,7 +28,6 @@ public:
 
 private:
     bool  m_daemon;
-    std::shared_ptr<YamlReader> m_spYamlReader;
 };
 
 } // namespace eular

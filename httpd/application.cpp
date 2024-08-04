@@ -40,6 +40,7 @@ namespace eular {
 void Application::init(int32_t argc, char *argv[])
 {
     m_daemon = false;
+    YamlReaderInstance::Get();
 
     eular::ConsoleConfig::Ptr pConsoleConfig(new eular::ConsoleConfig());
 
@@ -57,13 +58,11 @@ void Application::init(int32_t argc, char *argv[])
 
     const char *yamlPath = pConsoleConfig->getArg("c");
     if (yamlPath != nullptr) {
-        m_spYamlReader = std::make_shared<YamlReader>(yamlPath);
-        YamlReader reader(yamlPath);
-        if (!m_spYamlReader->valid()) {
+        YamlReaderInstance::Get()->loadYaml(yamlPath);
+        if (!YamlReaderInstance::Get()->valid()) {
             printf("invalid config: %s\n", yamlPath);
             abort();
         }
-
     }
 
     // 自定义日志处理句柄
@@ -75,12 +74,20 @@ void Application::init(int32_t argc, char *argv[])
 
 void Application::run()
 {
-    hv::HttpServer  g_http_server;
-    hv::HttpService g_http_service;
+    hv::HttpServer  httpServer;
+    hv::HttpService httpService;
 
-    eular::HttpRouter::Register(g_http_service);
-    g_http_server.registerHttpService(&g_http_service);
-    g_http_server.run("0.0.0.0:10080");
+    eular::HttpRouter::Register(httpService);
+    httpServer.registerHttpService(&httpService);
+    std::string bindHost;
+    bindHost = YamlReaderInstance::Get()->lookup<std::string>("http.ip", "0.0.0.0");
+    bindHost += ':';
+    bindHost += std::to_string(YamlReaderInstance::Get()->lookup<uint32_t>("http.port", 8080));
+
+    LOGD("Server bind to %s", bindHost.c_str());
+    httpServer.run(bindHost.c_str());
+
+    main_ctx_free();
 }
 
 void Application::HvLoggerHandler(int32_t loglevel, const char* buf, int32_t len)
