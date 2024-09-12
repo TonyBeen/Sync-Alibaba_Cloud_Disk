@@ -14,10 +14,12 @@
 
 #ifdef OS_LINUX
 #include <sys/inotify.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
 #include <sys/ioctl.h>
 #include <sys/select.h>
+#include <unistd.h>
 
 #define INOTIFY_EVENT_SIZE  (sizeof(struct inotify_event))
 #define MAX_BUF_SIZE (1024 * INOTIFY_EVENT_SIZE)

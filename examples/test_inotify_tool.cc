@@ -11,6 +11,8 @@
 #include <utils/errors.h>
 #include <log/log.h>
 
+#include <unistd.h>
+
 #define LOG_TAG "Test-Inotify"
 
 int main(int argc, char *argv[])
@@ -27,7 +29,7 @@ int main(int argc, char *argv[])
     eular::log::InitLog();
     eular::log::EnableLogColor(true);
     eular::log::SetPath(cwd);
-    eular::log::addOutputNode(eular::LogWrite::FILEOUT);
+    eular::log::addOutputNode(static_cast<int32_t>(eular::OutputType::FILEOUT));
 
     eular::InotifyTool::SP spInotifyTool = std::make_shared<eular::InotifyTool>();
 
