@@ -11,6 +11,11 @@
 #include <stdint.h>
 #include <memory>
 
+#include <hv/HttpServer.h>
+#include <utils/singleton.h>
+
+#include "upnp/upnp.h"
+
 namespace eular {
 class YamlReader;
 class Application
@@ -23,12 +28,23 @@ public:
 
     void run();
 
+    void stop();
+
     static void HvLoggerHandler(int32_t loglevel, const char* buf, int32_t len);
+
     void printHelp() const;
 
+protected:
+    static void Signalcatch(int sig);
+
 private:
-    bool  m_daemon;
+    bool    m_daemon;
+
+    std::unique_ptr<hv::HttpServer> m_httpServer;
+    std::unique_ptr<UPNPClient>     m_upnp;
 };
+
+using AppInstance = Singleton<Application>;
 
 } // namespace eular
 

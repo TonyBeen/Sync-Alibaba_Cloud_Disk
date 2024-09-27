@@ -5,13 +5,15 @@
     > Created Time: 2024年05月01日 星期三 16时47分44秒
  ************************************************************************/
 
+#include <utils/singleton.h>
+
 #include "httpd/application.h"
 
 int main(int argc, char **argv)
 {
-    eular::Application app;
-    app.init(argc, argv);
+    auto appInstance = eular::AppInstance::Get();
+    appInstance->init(argc, argv);
 
-    app.run();
+    appInstance->run();
     return 0;
 }

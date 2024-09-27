@@ -8,10 +8,11 @@
 #include "httpd/application.h"
 
 #include <log/log.h>
+#include <log/callstack.h>
 #include <config/YamlConfig.h>
 
-#include <hv/HttpServer.h>
 #include <hv/hmain.h>
+#include <hv/hsocket.h>
 #include <hv/hlog.h>
 
 #include "httpd/console_config.h"
@@ -42,6 +43,8 @@ void Application::init(int32_t argc, char *argv[])
     m_daemon = false;
     YamlReaderInstance::Get();
 
+    // Socketpair(AF_LOCAL, SOCK_STREAM, 0, m_sock);
+
     eular::ConsoleConfig::Ptr pConsoleConfig(new eular::ConsoleConfig());
 
     pConsoleConfig->setOption(long_options, ARRAY_SIZE(long_options));
@@ -70,27 +73,51 @@ void Application::init(int32_t argc, char *argv[])
     logger_set_handler(logger, &Application::HvLoggerHandler);
 
     main_ctx_init(argc, argv);
+    m_upnp = std::unique_ptr<UPNPClient>(new UPNPClient());
+    m_httpServer = std::make_unique<hv::HttpServer>();
 }
 
 void Application::run()
 {
-    hv::HttpServer  httpServer;
+    signal(SIGABRT, Signalcatch);
+    signal(SIGINT, Signalcatch);
+    signal(SIGSEGV, Signalcatch);
+    signal(SIGPIPE, SIG_IGN);
+
+    // 注册UPNP
+    if (m_upnp->hasValidIGD()) {
+        std::string localHost = YamlReaderInstance::Get()->lookup<std::string>("upnp.mapping.local_host", "0.0.0.0");
+        uint16_t localPort = YamlReaderInstance::Get()->lookup<uint16_t>("upnp.mapping.local_port", 8080);
+        uint16_t externalPort = YamlReaderInstance::Get()->lookup<uint16_t>("upnp.mapping.external_port", 8080);
+        uint32_t leaseDuration = YamlReaderInstance::Get()->lookup<uint32_t>("upnp.mapping.lease_time", 60 * 60);
+        m_upnp->addUPNP(localHost.c_str(), localPort, externalPort, PROTO_TCP, leaseDuration, "sync_aliyun");
+    }
+
     hv::HttpService httpService;
 
     eular::HttpRouter::Register(httpService);
-    httpServer.registerHttpService(&httpService);
+    m_httpServer->registerHttpService(&httpService);
     std::string bindHost;
     bindHost = YamlReaderInstance::Get()->lookup<std::string>("http.ip", "0.0.0.0");
     bindHost += ':';
     bindHost += std::to_string(YamlReaderInstance::Get()->lookup<uint32_t>("http.port", 8080));
 
     LOGD("Server bind to %s", bindHost.c_str());
-    httpServer.run(bindHost.c_str());
+    m_httpServer->run(bindHost.c_str());
 
     main_ctx_free();
 }
 
-void Application::HvLoggerHandler(int32_t loglevel, const char* buf, int32_t len)
+void Application::stop()
+{
+    m_httpServer->stop();
+    if (m_upnp->hasValidIGD()) {
+        uint16_t externalPort = YamlReaderInstance::Get()->lookup<uint16_t>("upnp.mapping.external_port", 8080);
+        m_upnp->delUPNP(externalPort, PROTO_TCP);
+    }
+}
+
+void Application::HvLoggerHandler(int32_t loglevel, const char *buf, int32_t len)
 {
     switch (loglevel) {
     case log_level_e::LOG_LEVEL_DEBUG:
@@ -118,6 +145,31 @@ void Application::printHelp() const
 {
     printf("Usage: %s [%s]\n", g_main_ctx.program_name, options);
     printf("Options:\n%s\n", detail_options);
+}
+
+void Application::Signalcatch(int sig)
+{
+    LOGI("catch signal %d", sig);
+    if (sig == SIGSEGV) {
+        // 产生堆栈信息;
+        eular::CallStack stack;
+        stack.update();
+        stack.log("SIGSEGV", LogLevel::LEVEL_FATAL);
+        exit(0);
+    }
+
+    if (sig == SIGABRT) {
+        // 产生堆栈信息;
+        eular::CallStack stack;
+        stack.update();
+        stack.log("SIGABRT", LogLevel::LEVEL_FATAL);
+        exit(0);
+    }
+
+    if (sig == SIGINT) {
+        AppInstance::Get()->stop();
+        exit(0);
+    }
 }
 
 } // namespace eular
