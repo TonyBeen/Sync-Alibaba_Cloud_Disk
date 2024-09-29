@@ -26,9 +26,12 @@ int32_t eular::HttpHandler::Auth(HttpRequest *req, HttpResponse *resp)
     // 1、根据URL回调获取 code
     std::string code;
     auto it = req->query_params.find("code");
-    if (it != req->query_params.end()) {
-        code = it->second;
+    if (it == req->query_params.end()) {
+        resp->SetBody("Your eggs are so big!");
+        return HTTP_STATUS_OK;
     }
+
+    code = it->second;
     LOGI("code = %s", code.c_str());
 
     std::string postJsonBody;

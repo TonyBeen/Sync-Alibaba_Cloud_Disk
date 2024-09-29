@@ -94,7 +94,7 @@ void Application::run()
     }
 
     hv::HttpService httpService;
-
+    httpService.document_root = YamlReaderInstance::Get()->lookup<std::string>("http.root", DEFAULT_DOCUMENT_ROOT);
     eular::HttpRouter::Register(httpService);
     m_httpServer->registerHttpService(&httpService);
     std::string bindHost;
