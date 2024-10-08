@@ -1,4 +1,4 @@
-/*************************************************************************
+ /*************************************************************************
     > File Name: http_handler.cpp
     > Author: hsz
     > Brief:
@@ -10,8 +10,11 @@
 #include <log/log.h>
 #include <hv/requests.h>
 #include <hv/axios.h>
+#include <hv/hv.h>
 
 #include <config/YamlConfig.h>
+#include "global_resource_management.h"
+#include "http_handler.h"
 
 #define LOG_TAG "HttpHandler"
 
@@ -23,6 +26,18 @@
 
 int32_t eular::HttpHandler::Auth(HttpRequest *req, HttpResponse *resp)
 {
+    // 已登录后无需重复登录
+    if (GlobalResourceInstance::Get()->logged_in) {
+        std::string html;
+        if (!Login(html)) {
+            return HTTP_STATUS_NOT_FOUND;
+        }
+
+        resp->SetContentType(http_content_type_str(http_content_type::TEXT_HTML));
+        resp->SetBody(html);
+        return HTTP_STATUS_OK;
+    }
+
     // 1、根据URL回调获取 code
     std::string code;
     auto it = req->query_params.find("code");
@@ -93,6 +108,9 @@ int32_t eular::HttpHandler::Auth(HttpRequest *req, HttpResponse *resp)
                             phoneNo = jsonResponse.at("phone");
                         }
                         LOGI("Object -> id: %s, name: %s, avatar: %s, phone: '%s'", id.c_str(), name.c_str(), avatar.c_str(), phoneNo.c_str());
+                        GlobalResourceInstance::Get()->image_url = avatar;
+                        GlobalResourceInstance::Get()->name = name;
+                        GlobalResourceInstance::Get()->logged_in = true;
                     }
                 } catch(const std::exception& e) {
                     LOGE("Invalid Json Body: [%s]: %s", userInfoResp->body.c_str(), e.what());
@@ -100,50 +118,57 @@ int32_t eular::HttpHandler::Auth(HttpRequest *req, HttpResponse *resp)
                 }
             }
 
-            // 4、获取 drive 信息
-            auto driveInfoResp = requests::post(OPENAPI_DOMAIN_NAME OPENAPI_DRIVE_INFO, NoBody, userInfoReq);
-            LOGI("POST [" OPENAPI_DOMAIN_NAME OPENAPI_DRIVE_INFO "] => Response %d %s\r\n", driveInfoResp->status_code, driveInfoResp->status_message());
-            if (driveInfoResp->status_code == HTTP_STATUS_OK) {
-                std::string default_drive_id;
-                try {
-                    jsonResponse = hv::Json::parse(driveInfoResp->body);
-                    if (jsonResponse.type() == nlohmann::json::value_t::object) {
-                        const std::string &user_id = jsonResponse.at("user_id");
-                        default_drive_id = jsonResponse.at("default_drive_id");
-                        std::string resource_drive_id;
-                        std::string backup_drive_id;
-                        if (jsonResponse.contains("resource_drive_id")) {
-                            resource_drive_id = jsonResponse.at("resource_drive_id");
-                        }
-                        if (jsonResponse.contains("backup_drive_id")) {
-                            backup_drive_id = jsonResponse.at("backup_drive_id");
-                        }
-
-                        LOGI("user_id: %s, default_drive_id: %s, resource_drive_id: %s, backup_drive_id: %s",
-                            user_id.c_str(), default_drive_id.c_str(), resource_drive_id.c_str(), backup_drive_id.c_str());
-                    }
-                } catch(const std::exception& e) {
-                    LOGE("Invalid Json Body: [%s]: %s", driveInfoResp->body.c_str(), e.what());
-                    return HTTP_STATUS_INTERNAL_SERVER_ERROR;
-                }
-
-                // 5、获取根目录文件列表
-                http_headers fileListReqHeader;
-                fileListReqHeader["Authorization"] = tokenType + " " + accessToken;
-                fileListReqHeader["Content-Type"] = "application/json";
-
-                nlohmann::json fileListReqBody;
-                fileListReqBody["drive_id"] = default_drive_id;
-                fileListReqBody["parent_file_id"] = "root";
-                auto fileListResp = requests::post(OPENAPI_DOMAIN_NAME OPENAPI_FILE_LIST, fileListReqBody.dump(), fileListReqHeader);
-                if (fileListResp->status_code == HTTP_STATUS_OK) {
-                    resp->SetBody(fileListResp->body);
-                    resp->SetContentType("application/json");
-                }
+            std::string html;
+            if (!Login(html)) {
+                return HTTP_STATUS_NOT_FOUND;
             }
 
-            // resp->SetBody(driveInfoResp->body);
-            // resp->SetContentType("application/json");
+            resp->SetContentType(http_content_type_str(http_content_type::TEXT_HTML));
+            resp->SetBody(html);
+            return HTTP_STATUS_OK;
+
+            // 4、获取 drive 信息
+            // auto driveInfoResp = requests::post(OPENAPI_DOMAIN_NAME OPENAPI_DRIVE_INFO, NoBody, userInfoReq);
+            // LOGI("POST [" OPENAPI_DOMAIN_NAME OPENAPI_DRIVE_INFO "] => Response %d %s\r\n", driveInfoResp->status_code, driveInfoResp->status_message());
+            // if (driveInfoResp->status_code == HTTP_STATUS_OK) {
+            //     std::string default_drive_id;
+            //     try {
+            //         jsonResponse = hv::Json::parse(driveInfoResp->body);
+            //         if (jsonResponse.type() == nlohmann::json::value_t::object) {
+            //             const std::string &user_id = jsonResponse.at("user_id");
+            //             default_drive_id = jsonResponse.at("default_drive_id");
+            //             std::string resource_drive_id;
+            //             std::string backup_drive_id;
+            //             if (jsonResponse.contains("resource_drive_id")) {
+            //                 resource_drive_id = jsonResponse.at("resource_drive_id");
+            //             }
+            //             if (jsonResponse.contains("backup_drive_id")) {
+            //                 backup_drive_id = jsonResponse.at("backup_drive_id");
+            //             }
+
+            //             LOGI("user_id: %s, default_drive_id: %s, resource_drive_id: %s, backup_drive_id: %s",
+            //                 user_id.c_str(), default_drive_id.c_str(), resource_drive_id.c_str(), backup_drive_id.c_str());
+            //         }
+            //     } catch(const std::exception& e) {
+            //         LOGE("Invalid Json Body: [%s]: %s", driveInfoResp->body.c_str(), e.what());
+            //         return HTTP_STATUS_INTERNAL_SERVER_ERROR;
+            //     }
+
+            //     // 5、获取根目录文件列表
+            //     http_headers fileListReqHeader;
+            //     fileListReqHeader["Authorization"] = tokenType + " " + accessToken;
+            //     fileListReqHeader["Content-Type"] = "application/json";
+
+            //     nlohmann::json fileListReqBody;
+            //     fileListReqBody["drive_id"] = default_drive_id;
+            //     fileListReqBody["parent_file_id"] = "root";
+            //     auto fileListResp = requests::post(OPENAPI_DOMAIN_NAME OPENAPI_FILE_LIST, fileListReqBody.dump(), fileListReqHeader);
+            //     if (fileListResp->status_code == HTTP_STATUS_OK) {
+            //         resp->SetBody(fileListResp->body);
+            //         resp->SetContentType("application/json");
+            //     }
+            // }
+
         } else {
             resp->SetBody(postResp->body);
             std::string code = jsonResponse.at("code");
@@ -158,8 +183,22 @@ int32_t eular::HttpHandler::Auth(HttpRequest *req, HttpResponse *resp)
     return HTTP_STATUS_OK;
 }
 
-int32_t eular::HttpHandler::Login(HttpRequest *req, HttpResponse *resp)
+int32_t eular::HttpHandler::Index(HttpRequest *req, HttpResponse *resp)
 {
+    HFile file;
+    static const std::string rootPath = YamlReaderInstance::Get()->lookup<std::string>("http.root", DEFAULT_DOCUMENT_ROOT);
+    static const std::string indexHtml = YamlReaderInstance::Get()->lookup<std::string>("http.index", "index.html");
+    static const std::string path = rootPath + "/" + indexHtml;
+    if (file.open(path.c_str(), "r") != 0) {
+        LOGI("[%s] not found", path.c_str());
+        return HTTP_STATUS_NOT_FOUND;
+    }
+
+    std::string fileContent;
+    file.readall(fileContent);
+    resp->SetBody(fileContent);
+    resp->SetContentType(http_content_type_str(TEXT_HTML));
+
     return HTTP_STATUS_OK;
 }
 
@@ -176,4 +215,23 @@ int32_t eular::HttpHandler::Makefile(HttpRequest *req, HttpResponse *resp)
     resp->SetBody(fileContent);
 
     return HTTP_STATUS_OK;
+}
+
+bool eular::HttpHandler::Login(std::string &html)
+{
+    HFile file;
+    std::string rootPath = YamlReaderInstance::Get()->lookup<std::string>("http.root", "/www/html") + "/home.html";
+    if (file.open(rootPath.c_str(), "r") != 0) {
+        LOGE("%s: %s Not Found", __PRETTY_FUNCTION__, rootPath.c_str());
+        return false;
+    }
+
+    std::string fileContent;
+    file.readall(fileContent);
+
+    html.resize(fileContent.size() + GlobalResourceInstance::Get()->image_url.size() + GlobalResourceInstance::Get()->name.size());
+    snprintf((char *)html.data(), html.capacity(), fileContent.c_str(),
+        GlobalResourceInstance::Get()->image_url.c_str(), GlobalResourceInstance::Get()->name.c_str());
+
+    return true;
 }

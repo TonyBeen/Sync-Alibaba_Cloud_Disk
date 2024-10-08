@@ -28,16 +28,11 @@ public:
      */
     static int32_t Auth(HttpRequest* req, HttpResponse* resp);
 
-    /**
-     * @brief 默认页面, 登录
-     * 
-     * @param req 
-     * @param resp 
-     * @return int32_t 
-     */
-    static int32_t Login(HttpRequest* req, HttpResponse* resp);
+    static int32_t Index(HttpRequest* req, HttpResponse* resp);
 
     static int32_t Makefile(HttpRequest *req, HttpResponse *resp);
+
+    static bool Login(std::string &html);
 };
 
 } // namespace eular

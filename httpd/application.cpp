@@ -75,6 +75,34 @@ void Application::init(int32_t argc, char *argv[])
     main_ctx_init(argc, argv);
     m_upnp = std::unique_ptr<UPNPClient>(new UPNPClient());
     m_httpServer = std::make_unique<hv::HttpServer>();
+    m_httpServer->onWorkerStart = [this] () {
+        this->m_hvLoop = hv::tlsEventLoop();
+    };
+
+    m_idleLoop = std::make_unique<hv::EventLoop>();
+    uint32_t leaseDuration = YamlReaderInstance::Get()->lookup<uint32_t>("upnp.mapping.lease_time", 24 * 60 * 60);
+    uint32_t upnpProbe = YamlReaderInstance::Get()->lookup<uint32_t>("upnp.upnp_probe", 5000);
+    m_idleLoop->setInterval(leaseDuration * 1000, [this, upnpProbe, leaseDuration] (hv::TimerID timerId) {
+        if (m_upnp->hasValidIGD()) {
+            std::string localHost = YamlReaderInstance::Get()->lookup<std::string>("upnp.mapping.local_host", "0.0.0.0");
+            uint16_t localPort = YamlReaderInstance::Get()->lookup<uint16_t>("upnp.mapping.local_port", 8080);
+            uint16_t externalPort = YamlReaderInstance::Get()->lookup<uint16_t>("upnp.mapping.external_port", 8080);
+            m_upnp->addUPNP(localHost.c_str(), localPort, externalPort, PROTO_TCP, leaseDuration, "sync_aliyun");
+        } else {
+            m_idleLoop->setInterval(upnpProbe, [this, leaseDuration] (hv::TimerID timerId) {
+                if (m_upnp->hasValidIGD()) {
+                    std::string localHost = YamlReaderInstance::Get()->lookup<std::string>("upnp.mapping.local_host", "0.0.0.0");
+                    uint16_t localPort = YamlReaderInstance::Get()->lookup<uint16_t>("upnp.mapping.local_port", 8080);
+                    uint16_t externalPort = YamlReaderInstance::Get()->lookup<uint16_t>("upnp.mapping.external_port", 8080);
+                    m_upnp->addUPNP(localHost.c_str(), localPort, externalPort, PROTO_TCP, leaseDuration, "sync_aliyun");
+
+                    m_idleLoop->killTimer(timerId);
+                }
+            });
+
+           m_idleLoop->killTimer(timerId);
+        }
+    });
 }
 
 void Application::run()
@@ -89,14 +117,28 @@ void Application::run()
         std::string localHost = YamlReaderInstance::Get()->lookup<std::string>("upnp.mapping.local_host", "0.0.0.0");
         uint16_t localPort = YamlReaderInstance::Get()->lookup<uint16_t>("upnp.mapping.local_port", 8080);
         uint16_t externalPort = YamlReaderInstance::Get()->lookup<uint16_t>("upnp.mapping.external_port", 8080);
-        uint32_t leaseDuration = YamlReaderInstance::Get()->lookup<uint32_t>("upnp.mapping.lease_time", 60 * 60);
+        uint32_t leaseDuration = YamlReaderInstance::Get()->lookup<uint32_t>("upnp.mapping.lease_time", 24 * 60 * 60);
         m_upnp->addUPNP(localHost.c_str(), localPort, externalPort, PROTO_TCP, leaseDuration, "sync_aliyun");
+    } else {
+        uint32_t upnpProbe = YamlReaderInstance::Get()->lookup<uint32_t>("upnp.upnp_probe", 5000);
+        m_idleLoop->setInterval(upnpProbe, [this] (hv::TimerID timerId) {
+            if (m_upnp->hasValidIGD()) {
+                std::string localHost = YamlReaderInstance::Get()->lookup<std::string>("upnp.mapping.local_host", "0.0.0.0");
+                uint16_t localPort = YamlReaderInstance::Get()->lookup<uint16_t>("upnp.mapping.local_port", 8080);
+                uint16_t externalPort = YamlReaderInstance::Get()->lookup<uint16_t>("upnp.mapping.external_port", 8080);
+                uint32_t leaseDuration = YamlReaderInstance::Get()->lookup<uint32_t>("upnp.mapping.lease_time", 24 * 60 * 60);
+                m_upnp->addUPNP(localHost.c_str(), localPort, externalPort, PROTO_TCP, leaseDuration, "sync_aliyun");
+
+                m_idleLoop->killTimer(timerId);
+            }
+        });
     }
 
     hv::HttpService httpService;
     httpService.document_root = YamlReaderInstance::Get()->lookup<std::string>("http.root", DEFAULT_DOCUMENT_ROOT);
     eular::HttpRouter::Register(httpService);
     m_httpServer->registerHttpService(&httpService);
+    m_httpServer->setThreadNum(1);
     std::string bindHost;
     bindHost = YamlReaderInstance::Get()->lookup<std::string>("http.ip", "0.0.0.0");
     bindHost += ':';
@@ -149,8 +191,8 @@ void Application::printHelp() const
 
 void Application::Signalcatch(int sig)
 {
-    LOGI("catch signal %d", sig);
     if (sig == SIGSEGV) {
+        LOGI("catch signal SIGSEGV");
         // 产生堆栈信息;
         eular::CallStack stack;
         stack.update();
@@ -159,6 +201,7 @@ void Application::Signalcatch(int sig)
     }
 
     if (sig == SIGABRT) {
+        LOGI("catch signal SIGABRT");
         // 产生堆栈信息;
         eular::CallStack stack;
         stack.update();
@@ -167,6 +210,7 @@ void Application::Signalcatch(int sig)
     }
 
     if (sig == SIGINT) {
+        LOGI("catch signal SIGINT");
         AppInstance::Get()->stop();
         exit(0);
     }

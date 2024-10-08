@@ -8,7 +8,12 @@
 #ifndef __HTTPD_GLOBAL_RESOURCE_MANAGEMENT_H__
 #define __HTTPD_GLOBAL_RESOURCE_MANAGEMENT_H__
 
+#include <string>
+
 #include <utils/singleton.h>
+
+#define DEFAULT_NAME        "null"
+#define DEFAULT_IMAGE_URL   "default-avatar.png"
 
 namespace eular {
 class GlobalResourceManagement
@@ -17,8 +22,9 @@ public:
     GlobalResourceManagement();
     ~GlobalResourceManagement();
 
-private:
-
+    bool            logged_in = false; // 已登录
+    std::string     name = DEFAULT_NAME; // 用户名
+    std::string     image_url = DEFAULT_IMAGE_URL; // 头像地址
 };
 
 using GlobalResourceInstance = Singleton<GlobalResourceManagement>;

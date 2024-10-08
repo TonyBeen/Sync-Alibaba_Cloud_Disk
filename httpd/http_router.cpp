@@ -11,6 +11,7 @@
 namespace eular {
 void HttpRouter::Register(hv::HttpService &router)
 {
+    router.GET("/", &HttpHandler::Index);
     router.GET("/auth", &HttpHandler::Auth);
     router.GET("/Makefile", &HttpHandler::Makefile);
 }

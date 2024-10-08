@@ -12,6 +12,8 @@
 #include <memory>
 
 #include <hv/HttpServer.h>
+#include <hv/EventLoop.h>
+
 #include <utils/singleton.h>
 
 #include "upnp/upnp.h"
@@ -34,12 +36,16 @@ public:
 
     void printHelp() const;
 
+public:
+    hv::EventLoop*  m_hvLoop;
+
 protected:
     static void Signalcatch(int sig);
 
 private:
     bool    m_daemon;
 
+    std::unique_ptr<hv::EventLoop>  m_idleLoop;
     std::unique_ptr<hv::HttpServer> m_httpServer;
     std::unique_ptr<UPNPClient>     m_upnp;
 };
