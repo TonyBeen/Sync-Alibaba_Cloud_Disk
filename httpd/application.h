@@ -38,6 +38,7 @@ public:
 
 public:
     hv::EventLoop*  m_hvLoop;
+    int32_t         m_sock[2];
 
 protected:
     static void Signalcatch(int sig);

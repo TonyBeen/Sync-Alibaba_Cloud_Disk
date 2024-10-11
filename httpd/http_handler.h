@@ -33,6 +33,10 @@ public:
     static int32_t Makefile(HttpRequest *req, HttpResponse *resp);
 
     static bool Login(std::string &html);
+
+protected:
+    // 刷新 token
+    static void UpdateToken();
 };
 
 } // namespace eular

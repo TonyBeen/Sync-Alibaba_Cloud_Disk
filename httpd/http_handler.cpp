@@ -7,14 +7,16 @@
 
 #include "httpd/http_handler.h"
 
-#include <log/log.h>
 #include <hv/requests.h>
 #include <hv/axios.h>
 #include <hv/hv.h>
 
 #include <config/YamlConfig.h>
+#include <log/log.h>
+
 #include "global_resource_management.h"
 #include "http_handler.h"
+#include "application.h"
 
 #define LOG_TAG "HttpHandler"
 
@@ -85,6 +87,14 @@ int32_t eular::HttpHandler::Auth(HttpRequest *req, HttpResponse *resp)
             std::string accessToken = jsonResponse.at("access_token");
             std::string refreshToken = jsonResponse.at("refresh_token");
             uint32_t expireTime = jsonResponse.at("expires_in");
+
+            GlobalResourceInstance::Get()->refresh_token = refreshToken;
+            GlobalResourceInstance::Get()->token = accessToken;
+            GlobalResourceInstance::Get()->token_expire = expireTime;
+
+            AppInstance::Get()->m_hvLoop->setTimeout((expireTime - 1) * 1000, [] (hv::TimerID) {
+                HttpHandler::UpdateToken();
+            });
 
             LOGI("tokenType = %s", tokenType.c_str());
             LOGI("access_token = %s", accessToken.c_str());
@@ -185,21 +195,34 @@ int32_t eular::HttpHandler::Auth(HttpRequest *req, HttpResponse *resp)
 
 int32_t eular::HttpHandler::Index(HttpRequest *req, HttpResponse *resp)
 {
-    HFile file;
     static const std::string rootPath = YamlReaderInstance::Get()->lookup<std::string>("http.root", DEFAULT_DOCUMENT_ROOT);
     static const std::string indexHtml = YamlReaderInstance::Get()->lookup<std::string>("http.index", "index.html");
+    static const std::string redirectHost = YamlReaderInstance::Get()->lookup<std::string>("http.redirect", indexHtml);
     static const std::string path = rootPath + "/" + indexHtml;
-    if (file.open(path.c_str(), "r") != 0) {
-        LOGI("[%s] not found", path.c_str());
-        return HTTP_STATUS_NOT_FOUND;
+
+    if (GlobalResourceInstance::Get()->logged_in) {
+        // HFile file;
+        
+        // if (file.open(path.c_str(), "r") != 0) {
+        //     LOGI("[%s] not found", path.c_str());
+        //     return HTTP_STATUS_NOT_FOUND;
+        // }
+
+        // std::string fileContent;
+        // file.readall(fileContent);
+        // resp->SetBody(fileContent);
+        // resp->SetContentType(http_content_type_str(TEXT_HTML));
+        std::string html;
+        if (!Login(html)) {
+            return HTTP_STATUS_NOT_FOUND;
+        }
+
+        resp->SetContentType(http_content_type_str(http_content_type::TEXT_HTML));
+        resp->SetBody(html);
+        return HTTP_STATUS_OK;
     }
 
-    std::string fileContent;
-    file.readall(fileContent);
-    resp->SetBody(fileContent);
-    resp->SetContentType(http_content_type_str(TEXT_HTML));
-
-    return HTTP_STATUS_OK;
+    return resp->Redirect(redirectHost);
 }
 
 int32_t eular::HttpHandler::Makefile(HttpRequest *req, HttpResponse *resp)
@@ -234,4 +257,61 @@ bool eular::HttpHandler::Login(std::string &html)
         GlobalResourceInstance::Get()->image_url.c_str(), GlobalResourceInstance::Get()->name.c_str());
 
     return true;
+}
+
+void eular::HttpHandler::UpdateToken()
+{
+    std::string postJsonBody;
+    try {
+        hv::Json refreshTokenJson;
+        refreshTokenJson["client_id"] = YamlReaderInstance::Get()->lookup<std::string>("http.app_id");
+        refreshTokenJson["client_secret"] = YamlReaderInstance::Get()->lookup<std::string>("http.app_secret");
+        refreshTokenJson["grant_type"] = "refresh_token";
+        refreshTokenJson["code"] = GlobalResourceInstance::Get()->refresh_token;
+
+        postJsonBody = refreshTokenJson.dump();
+    } catch(const std::exception& e) {
+        postJsonBody.clear();
+        LOGE("UpdateToken() catch exception: %s", e.what());
+    }
+
+    http_headers headers;
+    headers["Content-Type"] = "application/json";
+    auto postResp = requests::post(OPENAPI_DOMAIN_NAME OPENAPI_ACCESS_TOKEN, postJsonBody, headers);
+    if (postResp == nullptr) {
+        LOGE("UpdateToken() post '" OPENAPI_DOMAIN_NAME OPENAPI_ACCESS_TOKEN "' failed!\n");
+        return;
+    }
+
+    LOGI("POST [" OPENAPI_DOMAIN_NAME OPENAPI_ACCESS_TOKEN "] => Response %d %s\r\n", postResp->status_code, postResp->status_message());
+    hv::Json jsonResponse;
+    try {
+        jsonResponse = hv::Json::parse(postResp->body);
+        LOGI("POST " OPENAPI_DOMAIN_NAME OPENAPI_ACCESS_TOKEN "-> Response: %s", postResp->body.c_str());
+        if (postResp->status_code == HTTP_STATUS_OK) {
+            std::string tokenType = jsonResponse.at("token_type");
+            std::string accessToken = jsonResponse.at("access_token");
+            std::string refreshToken = jsonResponse.at("refresh_token");
+            uint32_t expireTime = jsonResponse.at("expires_in");
+
+            // 刷新 refresh_token 和 token
+            GlobalResourceInstance::Get()->refresh_token = refreshToken;
+            GlobalResourceInstance::Get()->token = accessToken;
+            GlobalResourceInstance::Get()->token_expire = expireTime;
+
+            LOGD("tokenType = %s", tokenType.c_str());
+            LOGD("access_token = %s", accessToken.c_str());
+            LOGD("refreshToken = %s", refreshToken.c_str());
+            LOGD("expireTime = %u", expireTime);
+        }
+    } catch(const std::exception& e) {
+        postJsonBody.clear();
+        LOGE("UpdateToken() catch exception: %s", e.what());
+    }
+
+    // 下次触发时间
+    uint32_t expireTime = GlobalResourceInstance::Get()->token_expire - 1;
+    AppInstance::Get()->m_hvLoop->setTimeout(expireTime * 1000, [] (hv::TimerID) {
+        HttpHandler::UpdateToken();
+    });
 }

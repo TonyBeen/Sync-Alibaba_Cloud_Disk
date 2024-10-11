@@ -10,6 +10,7 @@
 
 #include <string>
 
+#include <utils/mutex.h>
 #include <utils/singleton.h>
 
 #define DEFAULT_NAME        "null"
@@ -19,12 +20,19 @@ namespace eular {
 class GlobalResourceManagement
 {
 public:
-    GlobalResourceManagement();
-    ~GlobalResourceManagement();
+    GlobalResourceManagement()
+    {
+        refresh_token.reserve(512);
+        token.reserve(512);
+    }
 
     bool            logged_in = false; // 已登录
     std::string     name = DEFAULT_NAME; // 用户名
     std::string     image_url = DEFAULT_IMAGE_URL; // 头像地址
+
+    std::string     refresh_token;
+    std::string     token;
+    uint32_t        token_expire = 600; // 秒
 };
 
 using GlobalResourceInstance = Singleton<GlobalResourceManagement>;

@@ -8,13 +8,6 @@
 #include "httpd/global_resource_management.h"
 
 namespace eular {
-GlobalResourceManagement::GlobalResourceManagement()
-{
-}
-
-GlobalResourceManagement::~GlobalResourceManagement()
-{
-}
 
 
 } // namespace eular

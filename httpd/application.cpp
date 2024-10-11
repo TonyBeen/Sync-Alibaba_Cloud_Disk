@@ -13,6 +13,7 @@
 
 #include <hv/hmain.h>
 #include <hv/hsocket.h>
+#include <hv/hloop.h>
 #include <hv/hlog.h>
 
 #include "httpd/console_config.h"
@@ -43,12 +44,13 @@ void Application::init(int32_t argc, char *argv[])
     m_daemon = false;
     YamlReaderInstance::Get();
 
-    // Socketpair(AF_LOCAL, SOCK_STREAM, 0, m_sock);
+    if (Socketpair(AF_LOCAL, SOCK_STREAM, 0, m_sock) != 0) {
+        perror("socketpair failed");
+        return;
+    }
 
     eular::ConsoleConfig::Ptr pConsoleConfig(new eular::ConsoleConfig());
-
     pConsoleConfig->setOption(long_options, ARRAY_SIZE(long_options));
-
     if (!pConsoleConfig->parse(argc, argv)) {
         printf("parse failed\n");
         abort();
@@ -77,11 +79,18 @@ void Application::init(int32_t argc, char *argv[])
     m_httpServer = std::make_unique<hv::HttpServer>();
     m_httpServer->onWorkerStart = [this] () {
         this->m_hvLoop = hv::tlsEventLoop();
+        hio_t *io = hio_get(m_hvLoop->loop(), m_sock[0]);
+        // 设置读事件回调
+        hio_setcb_read(io, [] (hio_t *io, void *buf, int readbytes) {
+
+        });
+        // 添加读事件
+        hio_read(io);
     };
 
     m_idleLoop = std::make_unique<hv::EventLoop>();
     uint32_t leaseDuration = YamlReaderInstance::Get()->lookup<uint32_t>("upnp.mapping.lease_time", 24 * 60 * 60);
-    uint32_t upnpProbe = YamlReaderInstance::Get()->lookup<uint32_t>("upnp.upnp_probe", 5000);
+    uint32_t upnpProbe = YamlReaderInstance::Get()->lookup<uint32_t>("upnp.upnp_probe", 30000);
     m_idleLoop->setInterval(leaseDuration * 1000, [this, upnpProbe, leaseDuration] (hv::TimerID timerId) {
         if (m_upnp->hasValidIGD()) {
             std::string localHost = YamlReaderInstance::Get()->lookup<std::string>("upnp.mapping.local_host", "0.0.0.0");
@@ -191,6 +200,7 @@ void Application::printHelp() const
 
 void Application::Signalcatch(int sig)
 {
+    AppInstance::Get()->stop();
     if (sig == SIGSEGV) {
         LOGI("catch signal SIGSEGV");
         // 产生堆栈信息;
@@ -211,7 +221,6 @@ void Application::Signalcatch(int sig)
 
     if (sig == SIGINT) {
         LOGI("catch signal SIGINT");
-        AppInstance::Get()->stop();
         exit(0);
     }
 }
