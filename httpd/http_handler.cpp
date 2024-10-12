@@ -133,6 +133,8 @@ int32_t eular::HttpHandler::Auth(HttpRequest *req, HttpResponse *resp)
                 return HTTP_STATUS_NOT_FOUND;
             }
 
+            // TODO 启动下载线程池
+
             resp->SetContentType(http_content_type_str(http_content_type::TEXT_HTML));
             resp->SetBody(html);
             return HTTP_STATUS_OK;
@@ -171,12 +173,36 @@ int32_t eular::HttpHandler::Auth(HttpRequest *req, HttpResponse *resp)
 
             //     nlohmann::json fileListReqBody;
             //     fileListReqBody["drive_id"] = default_drive_id;
+            //     fileListReqBody["limit"] = 100;
             //     fileListReqBody["parent_file_id"] = "root";
             //     auto fileListResp = requests::post(OPENAPI_DOMAIN_NAME OPENAPI_FILE_LIST, fileListReqBody.dump(), fileListReqHeader);
+            //     LOGI("POST [" OPENAPI_DOMAIN_NAME OPENAPI_FILE_LIST "] => Response %d %s\r\n", fileListResp->status_code, fileListResp->status_message());
             //     if (fileListResp->status_code == HTTP_STATUS_OK) {
-            //         resp->SetBody(fileListResp->body);
-            //         resp->SetContentType("application/json");
+            //         try
+            //         {
+            //             nlohmann::json fileJson = nlohmann::json::parse(fileListResp->body);
+            //             if (fileJson.contains("items")) {
+            //                 nlohmann::json fileItemJsonArray = fileJson.at("items");
+            //                 LOG_ASSERT(fileItemJsonArray.is_array(), "fileItemJsonArray.type = %s", fileItemJsonArray.type_name());
+            //                 for (const auto &fileItem : fileItemJsonArray) {
+            //                     if (fileItem.at("type") == "folder") {
+            //                         fileListReqBody["parent_file_id"] = fileItem["file_id"];
+            //                         break;
+            //                     }
+            //                 }
+
+            //                 fileListResp = requests::post(OPENAPI_DOMAIN_NAME OPENAPI_FILE_LIST, fileListReqBody.dump(), fileListReqHeader);
+            //                 LOGI("POST [" OPENAPI_DOMAIN_NAME OPENAPI_FILE_LIST "] => Response %d %s\r\n", fileListResp->status_code, fileListResp->status_message());
+            //             }
+            //         }
+            //         catch(const std::exception& e)
+            //         {
+            //             LOGE("************************** %s", e.what());
+            //         }
             //     }
+
+            //     resp->SetBody(fileListResp->body);
+            //     resp->SetContentType("application/json");
             // }
 
         } else {
