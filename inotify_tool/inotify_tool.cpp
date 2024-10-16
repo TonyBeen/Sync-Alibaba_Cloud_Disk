@@ -265,10 +265,8 @@ int32_t InotifyTool::waitCompleteEvent(uint32_t timeout)
     char eventBuffer[MAX_BUF_SIZE];
     do {
         ssize_t readSize = ::read(m_inotifyFd, eventBuffer, MAX_BUF_SIZE);
-        if (readSize < 0)
-        {
-            if (errno != EAGAIN)
-            {
+        if (readSize < 0) {
+            if (errno != EAGAIN) {
                 setErrorCode(errno);
                 LOGE("read(%d) error. [%d, %s]", m_inotifyFd, errno, strerror(errno));
                 return UNKNOWN_ERROR;
@@ -277,11 +275,10 @@ int32_t InotifyTool::waitCompleteEvent(uint32_t timeout)
             break;
         }
 
-        LOGI("read size: %zd", readSize);
+        LOGD("read size: %zd", readSize);
 
         // 读到结尾
-        if (readSize == 0)
-        {
+        if (readSize == 0) {
             break;
         }
 
@@ -528,7 +525,8 @@ void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
             {
                 deletedItem = pInoEvent->name;
             }
-            eventItem.name = it.value() + deletedItem;
+            eventItem.path = it.value();
+            eventItem.name = deletedItem;
             m_eventItemQueue.push_back(eventItem);
 
             // 卸载磁盘或自身被删除需要解除监视
@@ -556,7 +554,8 @@ void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
         {
             eventItem.cookie = pInoEvent->cookie;
             eventItem.event |= EV_IN_DELETE;
-            eventItem.name = it.value() + pInoEvent->name;
+            eventItem.path = it.value();
+            eventItem.name = pInoEvent->name;
             m_eventItemQueue.push_back(eventItem);
 
             continue;
@@ -585,7 +584,8 @@ void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
 
             eventItem.cookie = pInoEvent->cookie;
             eventItem.event |= EV_IN_CREATE;
-            eventItem.name = it.value() + pInoEvent->name;
+            eventItem.path = it.value();
+            eventItem.name = pInoEvent->name;
             m_eventItemQueue.push_back(eventItem);
 
             continue;
@@ -615,7 +615,8 @@ void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
             {
                 eventItem.cookie = pInoEvent->cookie;
                 eventItem.event |= EV_IN_MODIFY_OVER;
-                eventItem.name = filePath;
+                eventItem.path = it.value();
+                eventItem.name = pInoEvent->name;
                 m_eventItemQueue.push_back(eventItem);
 
                 m_fileModifySet.erase(modifyIt);
@@ -633,7 +634,8 @@ void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
 
             eventItem.cookie = pInoEvent->cookie;
             eventItem.event |= EV_IN_MOVED_OUT;
-            eventItem.name = it.value() + pInoEvent->name;
+            eventItem.path = it.value();
+            eventItem.name = pInoEvent->name;
             m_eventItemQueue.push_back(eventItem);
 
             // NOTE 考虑到对目录重命名会产生IN_MOVED_FROM事件, 故不在此处进行inotify的删除wd操作
@@ -695,8 +697,11 @@ void InotifyTool::_parseEvent(ByteBuffer &inotifyEventBuf)
 
             eventItem.cookie = pInoEvent->cookie;
             eventItem.event |= EV_IN_MOVED_IN;
-            eventItem.name = parentPath + pMoveIn;
+            eventItem.path = parentPath;
+            eventItem.name = pMoveIn;
             m_eventItemQueue.push_back(eventItem);
+
+            continue;
         }
 
         // NOTE IN_MOVED_FROM和IN_MOVED_TO是连续事件, 中间不会被其他事件隔开

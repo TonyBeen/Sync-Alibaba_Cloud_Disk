@@ -41,7 +41,8 @@ struct InotifyEventItem
 {
     uint32_t        event = 0;  // 产生的事件
     uint32_t        cookie = 0; // 关联两个事件
-    std::string     name;       // 发生事件的名称
+    std::string     path;       // 监视的路径, 如果监视的文件则是文件的绝对路径
+    std::string     name;       // 发生事件的文件名(路径时此值为空)
 };
 
 

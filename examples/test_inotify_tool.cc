@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
     while (true)
     {
         int32_t errorCode = spInotifyTool->waitCompleteEvent(0);
-        if (errorCode != NO_ERROR)
+        if (errorCode != Status::OK)
         {
             perror("waitCompleteEvent error");
             continue;
@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
         for (const auto &it : eventItemVec)
         {
             const std::string &event = Event2String(it.event);
-            LOGI("%s: %s\n", it.name.c_str(), event.c_str());
+            LOGI("path: %s, name: %s: %s\n", it.path.c_str(), it.name.c_str(), event.c_str());
         }
     }
 

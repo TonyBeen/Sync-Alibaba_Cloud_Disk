@@ -4,7 +4,7 @@
 
 
 <font color = "green">
-库依赖: redis v5.0.7 libhv v1.3.2 mbedtls v3.5.0 liblog develop libutils develop
+库依赖: SQLiteCpp 3.3.1 libhv v1.3.2 mbedtls v3.5.0 liblog develop libutils develop
 </font>
 
-对同一个文件的 "创建, 读, 写, 删除" 能打到同一个线程
+对同一个文件的 "创建, 读, 写, 删除" 能打到同一个线程, 拷贝、移动除外

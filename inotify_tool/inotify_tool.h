@@ -86,7 +86,7 @@ public:
     int32_t watchRecursive(const std::vector<std::string> &paths, uint32_t ev);
 
     /**
-     * @brief 
+     * @brief 未实现
      * 
      * @param path 
      */
