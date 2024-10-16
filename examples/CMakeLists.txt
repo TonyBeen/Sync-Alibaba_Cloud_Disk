@@ -18,5 +18,5 @@ foreach(SOURCE_FILE ${SOURCE_FILE_LIST})
     target_compile_definitions(${FILE_NAME} PRIVATE NDEBUG)
 
     # miniupnpc::miniupnpc
-    target_link_libraries(${FILE_NAME} PRIVATE eular::inotify_tool eular::upnpclient utils log hv pthread)
+    target_link_libraries(${FILE_NAME} PRIVATE eular::inotify_tool eular::upnpclient SQLiteCpp utils log hv pthread)
 endforeach()

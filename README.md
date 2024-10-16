@@ -4,7 +4,7 @@
 
 
 <font color = "green">
-预计使用的库: redis sqllite libhv mbedtls liblog
+库依赖: redis v5.0.7 libhv v1.3.2 mbedtls v3.5.0 liblog develop libutils develop
 </font>
 
 对同一个文件的 "创建, 读, 写, 删除" 能打到同一个线程

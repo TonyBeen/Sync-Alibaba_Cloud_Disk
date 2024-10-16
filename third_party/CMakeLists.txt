@@ -1,1 +1,2 @@
 add_subdirectory(miniupnpc)
+add_subdirectory(SQLiteCpp)
