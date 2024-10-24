@@ -8,10 +8,13 @@
 #ifndef __HTTP_THREAD_POOL_H__
 #define __HTTP_THREAD_POOL_H__
 
-#include "sync_thread.h"
+#include <SQLiteCpp/SQLiteCpp.h>
 
 #include <utils/consistent_hash.h>
 #include <utils/singleton.h>
+
+#include "global_resource_management.h"
+#include "sync_thread.h"
 
 namespace eular {
 class ThreadPool
@@ -20,8 +23,16 @@ public:
     ThreadPool();
     ~ThreadPool();
 
+    bool start();
+    void stop();
+
+protected:
+    void flushSQLite();
+    void syncFromCloud();
+
 private:
-    ConsistentHash<SyncThread::SP> m_conHash;
+    ConsistentHash<SyncThread::SP>      m_conHash;
+    Thread::SP      m_syncTh;
 };
 
 using ThreadPoolInstance = Singleton<ThreadPool>;

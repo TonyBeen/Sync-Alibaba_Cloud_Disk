@@ -9,8 +9,15 @@
 
 #include "httpd/application.h"
 
+#include <sqlite3.h>
+
 int main(int argc, char **argv)
 {
+    if (!sqlite3_threadsafe()) {
+        std::cout << "SQLite is NOT thread-safe" << std::endl;
+        return 0;
+    }
+
     auto appInstance = eular::AppInstance::Get();
     appInstance->init(argc, argv);
 

@@ -10,6 +10,8 @@
 
 #include <string>
 
+#include <SQLiteCpp/SQLiteCpp.h>
+
 #include <utils/mutex.h>
 #include <utils/singleton.h>
 
@@ -33,6 +35,8 @@ public:
     std::string     refresh_token;
     std::string     token;
     uint32_t        token_expire = 600; // 秒
+
+    std::shared_ptr<SQLite::Database>   m_sqliteHandle;
 };
 
 using GlobalResourceInstance = Singleton<GlobalResourceManagement>;
