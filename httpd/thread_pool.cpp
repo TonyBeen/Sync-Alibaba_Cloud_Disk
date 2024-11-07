@@ -9,6 +9,8 @@
 
 #include "sql_config.h"
 
+#include <config/YamlConfig.h>
+
 #include <log/log.h>
 
 #define LOG_TAG "ThreadPool"
@@ -56,8 +58,16 @@ bool ThreadPool::start()
     }
 
     try {
-        // 2、创建线程执行执行
-        m_syncTh = std::make_shared<Thread>([this](){
+        // 2、创建下载线程
+        uint16_t cpuCores = eular::YamlReaderInstance::Get()->lookup("thread.cpu_cores", 4);
+        m_syncThreadVec.resize(cpuCores);
+        for (uint16_t i = 0; i < cpuCores; ++i) {
+            m_syncThreadVec[i] = std::make_shared<SyncThread>();
+            m_syncThreadHashMap.insertNode(std::to_string(i), m_syncThreadVec[i].get());
+        }
+
+        // 3、创建线程执行执行
+        m_syncTh = std::make_shared<Thread>([this] () {
             this->syncFromCloud();
         }, "SYNC");
     } catch(const std::exception& e) {
@@ -100,6 +110,7 @@ void ThreadPool::flushSQLite()
 
 void ThreadPool::syncFromCloud()
 {
+    
 }
 
 } // namespace eular

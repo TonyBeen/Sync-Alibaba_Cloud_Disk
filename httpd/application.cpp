@@ -20,6 +20,7 @@
 #include "httpd/http_router.h"
 #include "httpd/http_handler.h"
 #include "application.h"
+#include "thread_pool.h"
 
 #define LOG_TAG     "Application"
 #define HV_LOG_TAG  "libhv"
@@ -43,6 +44,8 @@ void Application::init(int32_t argc, char *argv[])
 {
     m_daemon = false;
     YamlReaderInstance::Get();
+    GlobalResourceInstance::Get();
+    ThreadPoolInstance::Get();
 
     if (Socketpair(AF_LOCAL, SOCK_STREAM, 0, m_sock) != 0) {
         perror("socketpair failed");
@@ -161,6 +164,7 @@ void Application::run()
 
 void Application::stop()
 {
+    ThreadPoolInstance::Get()->stop();
     m_httpServer->stop();
     if (m_upnp->hasValidIGD()) {
         uint16_t externalPort = YamlReaderInstance::Get()->lookup<uint16_t>("upnp.mapping.external_port", 8080);

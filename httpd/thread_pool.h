@@ -8,6 +8,8 @@
 #ifndef __HTTP_THREAD_POOL_H__
 #define __HTTP_THREAD_POOL_H__
 
+#include <vector>
+
 #include <SQLiteCpp/SQLiteCpp.h>
 
 #include <utils/consistent_hash.h>
@@ -31,8 +33,9 @@ protected:
     void syncFromCloud();
 
 private:
-    ConsistentHash<SyncThread::SP>      m_conHash;
-    Thread::SP      m_syncTh;
+    ConsistentHash<SyncThread>  m_syncThreadHashMap;
+    std::vector<SyncThread::SP> m_syncThreadVec;
+    Thread::SP  m_syncTh; // 同步线程
 };
 
 using ThreadPoolInstance = Singleton<ThreadPool>;

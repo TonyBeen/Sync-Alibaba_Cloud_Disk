@@ -35,6 +35,9 @@ public:
     std::string     refresh_token;
     std::string     token;
     uint32_t        token_expire = 600; // 秒
+    std::string     default_drive_id;
+    std::string     resource_drive_id;
+    std::string     backup_drive_id;
 
     std::shared_ptr<SQLite::Database>   m_sqliteHandle;
 };

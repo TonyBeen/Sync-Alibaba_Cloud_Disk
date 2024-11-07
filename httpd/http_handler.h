@@ -32,9 +32,11 @@ public:
 
     static int32_t Makefile(HttpRequest *req, HttpResponse *resp);
 
-    static bool Login(std::string &html);
+    static int32_t Logout(HttpRequest *req, HttpResponse *resp);
 
 protected:
+    // 构造登录成功页面
+    static bool Login(std::string &html);
     // 刷新 token
     static void UpdateToken();
 };
