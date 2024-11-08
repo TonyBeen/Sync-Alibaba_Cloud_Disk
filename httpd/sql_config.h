@@ -55,7 +55,7 @@
     "CREATE TABLE IF NOT EXISTS " dbName "." SQL_TABLE_INFO " ("        \
         TABLE_INFO_FILE_ID " TEXT PRIMARY KEY NOT NULL,"                \
         TABLE_INFO_FILE_NAME " TEXT NOT NULL,"                          \
-        TABLE_INFO_FILE_PATH " TEXT NOT NULL"                           \
+        TABLE_INFO_FILE_PATH " TEXT NOT NULL,"                          \
         TABLE_INFO_PARENT_FILE_ID " TEXT NOT NULL,"                     \
         TABLE_INFO_DRIVE_ID " TEXT NOT NULL,"                           \
         TABLE_INFO_HASH " TEXT NOT NULL,"                               \

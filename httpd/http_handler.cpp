@@ -121,7 +121,6 @@ int32_t eular::HttpHandler::Auth(HttpRequest *req, HttpResponse *resp)
                         LOGI("Object -> id: %s, name: %s, avatar: %s, phone: '%s'", id.c_str(), name.c_str(), avatar.c_str(), phoneNo.c_str());
                         GlobalResourceInstance::Get()->image_url = avatar;
                         GlobalResourceInstance::Get()->name = name;
-                        GlobalResourceInstance::Get()->logged_in = true;
                     }
                 } catch(const std::exception& e) {
                     LOGE("Invalid Json Body: [%s]: %s", userInfoResp->body.c_str(), e.what());
@@ -205,13 +204,14 @@ int32_t eular::HttpHandler::Auth(HttpRequest *req, HttpResponse *resp)
                 return HTTP_STATUS_INTERNAL_SERVER_ERROR;
             }
 
-            // TODO 启动下载线程池
-            ThreadPoolInstance::Get()->start();
-
             std::string html;
             if (!Login(html)) {
                 return HTTP_STATUS_NOT_FOUND;
             }
+
+            // 启动下载线程池
+            ThreadPoolInstance::Get()->start();
+            GlobalResourceInstance::Get()->logged_in = true;
 
             resp->SetContentType(http_content_type_str(http_content_type::TEXT_HTML));
             resp->SetBody(html);

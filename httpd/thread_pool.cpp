@@ -32,10 +32,6 @@ ThreadPool::~ThreadPool()
 
 bool ThreadPool::start()
 {
-    if (GlobalResourceInstance::Get()->logged_in) {
-        return true;
-    }
-
     // 1、打开数据库
     try {
         auto &sqliteHandle = GlobalResourceInstance::Get()->sqlite_handle;
@@ -91,13 +87,17 @@ void ThreadPool::stop()
     if (!GlobalResourceInstance::Get()->logged_in) {
         return;
     }
+
+    flushSQLite();
 }
 
 void ThreadPool::flushSQLite()
 {
     try {
         auto sqliteHandle = GlobalResourceInstance::Get()->sqlite_handle;
-        LOG_ASSERT(sqliteHandle != nullptr, "sqliteHandle can't be null");
+        if (sqliteHandle == nullptr) {
+            return;
+        }
 
         // 将 内存数据库 刷新到 磁盘数据库
         sqliteHandle->exec("BEGIN TRANSACTION;");
@@ -125,7 +125,7 @@ void ThreadPool::syncFromCloud(std::string diskPath, std::string parentFileId)
     // 递归获取文件列表
     const std::string &tokenType = GlobalResourceInstance::Get()->token_type;
     const std::string &accessToken = GlobalResourceInstance::Get()->token;
-    const std::string &default_drive_id = GlobalResourceInstance::Get()->default_drive_id;
+    const std::string &default_drive_id = GlobalResourceInstance::Get()->resource_drive_id;
     auto &sqlHandle = GlobalResourceInstance::Get()->sqlite_handle;
 
     http_headers fileListReqHeader;
@@ -136,6 +136,7 @@ void ThreadPool::syncFromCloud(std::string diskPath, std::string parentFileId)
     fileListReqBody["drive_id"] = default_drive_id;
     fileListReqBody["limit"] = 100;
     fileListReqBody["parent_file_id"] = parentFileId;
+    std::this_thread::sleep_for(std::chrono::milliseconds(FILE_LIST_API_REQ_LIMIT)); // API限流
     auto fileListResp = requests::post(OPENAPI_DOMAIN_NAME OPENAPI_FILE_LIST, fileListReqBody.dump(), fileListReqHeader);
     LOGI("POST [" OPENAPI_DOMAIN_NAME OPENAPI_FILE_LIST "] => Response %d %s\r\n", fileListResp->status_code, fileListResp->status_message());
     if (fileListResp->status_code == HTTP_STATUS_OK) {
@@ -157,42 +158,45 @@ void ThreadPool::syncFromCloud(std::string diskPath, std::string parentFileId)
                 nlohmann::json sha1Hash = fileItem.at("content_hash"); // 文件夹为null
 
                 if (fileType == "folder") { // 文件夹
-                    std::filesystem::create_directories(diskPath + fileItemName);
+                    // std::filesystem::create_directories(diskPath + fileItemName);
                     // 加入info表
-                    try {
-                        SQLite::Statement query(*sqlHandle.get(), "INSERT INTO " SQL_TABLE_INFO " VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-                        query.bind(1, default_drive_id);
-                        query.bind(2, fileId);
-                        query.bind(3, parentFileId);
-                        query.bind(4, fileItemName);
-                        query.bind(5, diskPath);
-                        query.bind(6, "");
-                        query.bind(7, std::time(NULL));
-                        query.bind(8, 1);
-                        query.exec();
-                    } catch (const std::exception& e) {
-                        LOGE("insert into info error. %s", e.what());
-                    }
+                    // try {
+                    //     SQLite::Statement query(*sqlHandle.get(), "INSERT INTO " SQL_TABLE_INFO " VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                    //     query.bind(1, default_drive_id);
+                    //     query.bind(2, fileId);
+                    //     query.bind(3, parentFileId);
+                    //     query.bind(4, fileItemName);
+                    //     query.bind(5, diskPath);
+                    //     query.bind(6, "");
+                    //     query.bind(7, std::time(NULL));
+                    //     query.bind(8, 1);
+                    //     query.exec();
+                    // } catch (const std::exception& e) {
+                    //     LOGE("insert into info error. %s", e.what());
+                    // }
+
+                    LOGI("DIR: %s", std::string(diskPath + fileItemName).c_str());
 
                     syncFromCloud(diskPath + fileItemName, fileId);
                 } else if (fileType == "file") { // 文件
                     // 查询info表
-                    try {
-                        SQLite::Statement queryInfo(*sqlHandle.get(), "SELECT " TABLE_INFO_FILE_ID " FROM " SQL_TABLE_INFO " WHERE " TABLE_INFO_FILE_ID " = ?");
-                        queryInfo.bind(1, fileId);
-                        if (!queryInfo.executeStep()) { // 表中不存在数据
-                            FileDownloadItemNode node = {
-                                .drive_id = default_drive_id,
-                                .file_id = fileId,
-                                .file_path = diskPath,
-                                .file_name = fileItemName,
-                            };
+                    // try {
+                    //     SQLite::Statement queryInfo(*sqlHandle.get(), "SELECT " TABLE_INFO_FILE_ID " FROM " SQL_TABLE_INFO " WHERE " TABLE_INFO_FILE_ID " = ?");
+                    //     queryInfo.bind(1, fileId);
+                    //     if (!queryInfo.executeStep()) { // 表中不存在数据
+                    //         FileDownloadItemNode node = {
+                    //             .drive_id = default_drive_id,
+                    //             .file_id = fileId,
+                    //             .file_path = diskPath,
+                    //             .file_name = fileItemName,
+                    //         };
 
-                            m_syncThreadHashMap.getNode(diskPath + fileItemName)->enqueue(node);
-                        }
-                    } catch (const std::exception& e) {
-                        LOGE("insert into info error. %s", e.what());
-                    }
+                    //         m_syncThreadHashMap.getNode(diskPath + fileItemName)->enqueue(node);
+                    //     }
+                    // } catch (const std::exception& e) {
+                    //     LOGE("insert into info error. %s", e.what());
+                    // }
+                    LOGI("File: %s", std::string(diskPath + fileItemName).c_str());
                 } else {
 
                 }

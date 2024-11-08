@@ -14,4 +14,6 @@
 #define OPENAPI_DRIVE_INFO      "/adrive/v1.0/user/getDriveInfo"    // POST
 #define OPENAPI_FILE_LIST       "/adrive/v1.0/openFile/list"        // POST
 
+#define FILE_LIST_API_REQ_LIMIT 250 // 10 秒 40 次
+
 #endif // __HTTPD_API_CONFIG_H__
