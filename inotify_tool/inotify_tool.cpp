@@ -368,7 +368,7 @@ bool InotifyTool::isDir(const std::string &path) const
     {
         if (errno != ENOENT)
         {
-            LOGW("Stat failed on %s: %s\n", path, strerror(errno));
+            LOGW("Stat failed on %s: %s\n", path.c_str(), strerror(errno));
         }
 
         return false;

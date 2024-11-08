@@ -7,11 +7,17 @@
 
 #include "thread_pool.h"
 
-#include "sql_config.h"
+#include <filesystem>
+
+#include <hv/requests.h>
+#include <hv/axios.h>
+#include <hv/hv.h>
 
 #include <config/YamlConfig.h>
-
 #include <log/log.h>
+
+#include "sql_config.h"
+#include "api_config.h"
 
 #define LOG_TAG "ThreadPool"
 
@@ -32,7 +38,7 @@ bool ThreadPool::start()
 
     // 1、打开数据库
     try {
-        auto &g_sqliteHandle = GlobalResourceInstance::Get()->m_sqliteHandle;
+        auto &g_sqliteHandle = GlobalResourceInstance::Get()->sqlite_handle;
         g_sqliteHandle = std::make_shared<SQLite::Database>(SQL_STORAGE_DISK, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
         // (1)、给磁盘数据库起个别名
         g_sqliteHandle->exec(SQL_ATTACH_DB(SQL_STORAGE_DISK, SQL_DB_SYNC));
@@ -68,7 +74,7 @@ bool ThreadPool::start()
 
         // 3、创建线程执行执行
         m_syncTh = std::make_shared<Thread>([this] () {
-            this->syncFromCloud();
+            this->syncFromCloud(GlobalResourceInstance::Get()->root_path, "root");
         }, "SYNC");
     } catch(const std::exception& e) {
         LOGE("create thread exception: %s", e.what());
@@ -88,7 +94,7 @@ void ThreadPool::stop()
 void ThreadPool::flushSQLite()
 {
     try {
-        auto g_sqliteHandle = GlobalResourceInstance::Get()->m_sqliteHandle;
+        auto g_sqliteHandle = GlobalResourceInstance::Get()->sqlite_handle;
         LOG_ASSERT(g_sqliteHandle != nullptr, "g_sqliteHandle can't be null");
 
         // 将 内存数据库 刷新到 磁盘数据库
@@ -108,9 +114,59 @@ void ThreadPool::flushSQLite()
     }
 }
 
-void ThreadPool::syncFromCloud()
+void ThreadPool::syncFromCloud(std::string disk_path, std::string parent_file_id)
 {
-    
+    if (disk_path.back() != '/') {
+        disk_path.push_back('/');
+    }
+
+    // 递归获取文件列表
+    const std::string &tokenType = GlobalResourceInstance::Get()->token_type;
+    const std::string &accessToken = GlobalResourceInstance::Get()->token;
+    const std::string &default_drive_id = GlobalResourceInstance::Get()->default_drive_id;
+    auto &sqlHandle = GlobalResourceInstance::Get()->sqlite_handle;
+
+    http_headers fileListReqHeader;
+    fileListReqHeader["Authorization"] = tokenType + " " + accessToken;
+    fileListReqHeader["Content-Type"] = "application/json";
+
+    nlohmann::json fileListReqBody;
+    fileListReqBody["drive_id"] = default_drive_id;
+    fileListReqBody["limit"] = 100;
+    fileListReqBody["parent_file_id"] = parent_file_id;
+    auto fileListResp = requests::post(OPENAPI_DOMAIN_NAME OPENAPI_FILE_LIST, fileListReqBody.dump(), fileListReqHeader);
+    LOGI("POST [" OPENAPI_DOMAIN_NAME OPENAPI_FILE_LIST "] => Response %d %s\r\n", fileListResp->status_code, fileListResp->status_message());
+    if (fileListResp->status_code == HTTP_STATUS_OK) {
+        try {
+            nlohmann::json fileJson = nlohmann::json::parse(fileListResp->body);
+            if (!fileJson.contains("items")) {
+                return;
+            }
+            nlohmann::json fileItemJsonArray = fileJson.at("items");
+            if (!fileItemJsonArray.is_array()) {
+                LOGW("post " OPENAPI_FILE_LIST " response error. type(%s) != array", fileItemJsonArray.type_name());
+                return;
+            }
+
+            for (const auto &fileItem : fileItemJsonArray) {
+                const auto &fileType = fileItem.at("type");
+                const std::string &fileItemName = fileItem.at("name").get<std::string>();
+
+                if (fileType == "folder") { // 文件夹
+                    std::filesystem::create_directories(disk_path + fileItemName);
+                    // 加入info表
+                    sqlHandle->exec("");
+
+                    syncFromCloud(disk_path + fileItemName, fileItem["file_id"]);
+                } else if (fileType == "file") { // 文件
+                    // TODO 检验数据库是否存在此文件, 如果没有则加入download表
+
+                }
+            }
+        } catch(const std::exception& e) {
+            LOGE("************************** %s", e.what());
+        }
+    }
 }
 
 } // namespace eular

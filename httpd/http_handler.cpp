@@ -7,6 +7,8 @@
 
 #include "httpd/http_handler.h"
 
+#include <filesystem>
+
 #include <hv/requests.h>
 #include <hv/axios.h>
 #include <hv/hv.h>
@@ -87,6 +89,7 @@ int32_t eular::HttpHandler::Auth(HttpRequest *req, HttpResponse *resp)
             uint32_t expireTime = jsonResponse.at("expires_in");
 
             GlobalResourceInstance::Get()->refresh_token = refreshToken;
+            GlobalResourceInstance::Get()->token_type = tokenType;
             GlobalResourceInstance::Get()->token = accessToken;
             GlobalResourceInstance::Get()->token_expire = expireTime;
 
@@ -195,6 +198,11 @@ int32_t eular::HttpHandler::Auth(HttpRequest *req, HttpResponse *resp)
 
             //     resp->SetBody(fileListResp->body);
             //     resp->SetContentType("application/json");
+            }
+
+            GlobalResourceInstance::Get()->root_path = YamlReaderInstance::Get()->lookup<std::string>("storage.path", "/null");
+            if (!std::filesystem::exists(GlobalResourceInstance::Get()->root_path)) {
+                return HTTP_STATUS_INTERNAL_SERVER_ERROR;
             }
 
             // TODO 启动下载线程池
@@ -332,6 +340,7 @@ void eular::HttpHandler::UpdateToken()
 
             // 刷新 refresh_token 和 token
             GlobalResourceInstance::Get()->refresh_token = refreshToken;
+            GlobalResourceInstance::Get()->token_type = tokenType;
             GlobalResourceInstance::Get()->token = accessToken;
             GlobalResourceInstance::Get()->token_expire = expireTime;
 

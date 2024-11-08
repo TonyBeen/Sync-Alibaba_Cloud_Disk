@@ -214,7 +214,6 @@ void UPNPClient::displayUpnp() const
     for (pDevice = upnpDevList; nullptr != pDevice; pDevice = pDevice->pNext) {
         LOGI("    xml url: %s", pDevice->descURL);
         LOGI("    device type: %s", pDevice->st);
-        LOGI("");
     }
 
     int32_t index = 0;
