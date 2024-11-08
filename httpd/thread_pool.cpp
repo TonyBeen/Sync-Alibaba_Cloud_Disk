@@ -38,26 +38,27 @@ bool ThreadPool::start()
 
     // 1、打开数据库
     try {
-        auto &g_sqliteHandle = GlobalResourceInstance::Get()->sqlite_handle;
-        g_sqliteHandle = std::make_shared<SQLite::Database>(SQL_STORAGE_DISK, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
+        auto &sqliteHandle = GlobalResourceInstance::Get()->sqlite_handle;
+        const std::string &storagePath = GlobalResourceInstance::Get()->root_path;
+        sqliteHandle = std::make_shared<SQLite::Database>(storagePath + "/" SQL_STORAGE_DISK, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
         // (1)、给磁盘数据库起个别名
-        g_sqliteHandle->exec(SQL_ATTACH_DB(SQL_STORAGE_DISK, SQL_DB_SYNC));
+        sqliteHandle->exec(SQL_ATTACH_DB(SQL_STORAGE_DISK, SQL_DB_SYNC));
         // 为磁盘数据库创建表, 存在表则不会创建
-        g_sqliteHandle->exec(SQL_CREATE_TABLE_INFO(SQL_DB_SYNC));
-        g_sqliteHandle->exec(SQL_CREATE_TABLE_DOWNLOAD(SQL_DB_SYNC));
-        g_sqliteHandle->exec(SQL_CREATE_TABLE_UPLOAD(SQL_DB_SYNC));
+        sqliteHandle->exec(SQL_CREATE_TABLE_INFO(SQL_DB_SYNC));
+        sqliteHandle->exec(SQL_CREATE_TABLE_DOWNLOAD(SQL_DB_SYNC));
+        sqliteHandle->exec(SQL_CREATE_TABLE_UPLOAD(SQL_DB_SYNC));
 
         // (2)、附加内存数据库
-        g_sqliteHandle->exec(SQL_ATTACH_DB(SQL_STORAGE_MEMORY, SQL_DB_MEMORY));
+        sqliteHandle->exec(SQL_ATTACH_DB(SQL_STORAGE_MEMORY, SQL_DB_MEMORY));
         // 为内存数据库创建表
-        g_sqliteHandle->exec(SQL_CREATE_TABLE_INFO(SQL_DB_MEMORY));
-        g_sqliteHandle->exec(SQL_CREATE_TABLE_DOWNLOAD(SQL_DB_MEMORY));
-        g_sqliteHandle->exec(SQL_CREATE_TABLE_UPLOAD(SQL_DB_MEMORY));
+        sqliteHandle->exec(SQL_CREATE_TABLE_INFO(SQL_DB_MEMORY));
+        sqliteHandle->exec(SQL_CREATE_TABLE_DOWNLOAD(SQL_DB_MEMORY));
+        sqliteHandle->exec(SQL_CREATE_TABLE_UPLOAD(SQL_DB_MEMORY));
 
         // (3)、将磁盘数据库的数据加载到内存中
-        g_sqliteHandle->exec("INSERT INTO " SQL_DB_MEMORY "." SQL_TABLE_INFO " SELECT * FROM " SQL_DB_SYNC "." SQL_TABLE_INFO ";");
-        g_sqliteHandle->exec("INSERT INTO " SQL_DB_MEMORY "." SQL_TABLE_DOWNLOAD " SELECT * FROM " SQL_DB_SYNC "." SQL_TABLE_DOWNLOAD ";");
-        g_sqliteHandle->exec("INSERT INTO " SQL_DB_MEMORY "." SQL_TABLE_UPLOAD " SELECT * FROM " SQL_DB_SYNC "." SQL_TABLE_UPLOAD ";");
+        sqliteHandle->exec("INSERT INTO " SQL_DB_MEMORY "." SQL_TABLE_INFO " SELECT * FROM " SQL_DB_SYNC "." SQL_TABLE_INFO ";");
+        sqliteHandle->exec("INSERT INTO " SQL_DB_MEMORY "." SQL_TABLE_DOWNLOAD " SELECT * FROM " SQL_DB_SYNC "." SQL_TABLE_DOWNLOAD ";");
+        sqliteHandle->exec("INSERT INTO " SQL_DB_MEMORY "." SQL_TABLE_UPLOAD " SELECT * FROM " SQL_DB_SYNC "." SQL_TABLE_UPLOAD ";");
     } catch(const std::exception& e) {
         LOGE("catch exception: %s", e.what());
         return false;
@@ -75,6 +76,7 @@ bool ThreadPool::start()
         // 3、创建线程执行执行
         m_syncTh = std::make_shared<Thread>([this] () {
             this->syncFromCloud(GlobalResourceInstance::Get()->root_path, "root");
+            // TODO 开启inotify
         }, "SYNC");
     } catch(const std::exception& e) {
         LOGE("create thread exception: %s", e.what());
@@ -94,30 +96,30 @@ void ThreadPool::stop()
 void ThreadPool::flushSQLite()
 {
     try {
-        auto g_sqliteHandle = GlobalResourceInstance::Get()->sqlite_handle;
-        LOG_ASSERT(g_sqliteHandle != nullptr, "g_sqliteHandle can't be null");
+        auto sqliteHandle = GlobalResourceInstance::Get()->sqlite_handle;
+        LOG_ASSERT(sqliteHandle != nullptr, "sqliteHandle can't be null");
 
         // 将 内存数据库 刷新到 磁盘数据库
-        g_sqliteHandle->exec("BEGIN TRANSACTION;");
-        g_sqliteHandle->exec(SQL_DELETE_ALL_RECORD(SQL_DB_SYNC, SQL_TABLE_INFO));
-        g_sqliteHandle->exec(SQL_DELETE_ALL_RECORD(SQL_DB_SYNC, SQL_TABLE_DOWNLOAD));
-        g_sqliteHandle->exec(SQL_DELETE_ALL_RECORD(SQL_DB_SYNC, SQL_TABLE_UPLOAD));
-        g_sqliteHandle->exec("INSERT INTO " SQL_DB_SYNC "." SQL_TABLE_INFO " SELECT * FROM " SQL_DB_MEMORY "." SQL_TABLE_INFO ";");
-        g_sqliteHandle->exec("INSERT INTO " SQL_DB_SYNC "." SQL_TABLE_DOWNLOAD " SELECT * FROM " SQL_DB_MEMORY "." SQL_TABLE_DOWNLOAD ";");
-        g_sqliteHandle->exec("INSERT INTO " SQL_DB_SYNC "." SQL_TABLE_UPLOAD " SELECT * FROM " SQL_DB_MEMORY "." SQL_TABLE_UPLOAD ";");
-        g_sqliteHandle->exec("COMMIT;");
+        sqliteHandle->exec("BEGIN TRANSACTION;");
+        sqliteHandle->exec(SQL_DELETE_ALL_RECORD(SQL_DB_SYNC, SQL_TABLE_INFO));
+        sqliteHandle->exec(SQL_DELETE_ALL_RECORD(SQL_DB_SYNC, SQL_TABLE_DOWNLOAD));
+        sqliteHandle->exec(SQL_DELETE_ALL_RECORD(SQL_DB_SYNC, SQL_TABLE_UPLOAD));
+        sqliteHandle->exec("INSERT INTO " SQL_DB_SYNC "." SQL_TABLE_INFO " SELECT * FROM " SQL_DB_MEMORY "." SQL_TABLE_INFO ";");
+        sqliteHandle->exec("INSERT INTO " SQL_DB_SYNC "." SQL_TABLE_DOWNLOAD " SELECT * FROM " SQL_DB_MEMORY "." SQL_TABLE_DOWNLOAD ";");
+        sqliteHandle->exec("INSERT INTO " SQL_DB_SYNC "." SQL_TABLE_UPLOAD " SELECT * FROM " SQL_DB_MEMORY "." SQL_TABLE_UPLOAD ";");
+        sqliteHandle->exec("COMMIT;");
 
         // 分离
-        g_sqliteHandle->exec("DETACH " SQL_DB_MEMORY ";");
+        sqliteHandle->exec("DETACH " SQL_DB_MEMORY ";");
     } catch(const std::exception& e) {
         LOGE("catch exception: %s", e.what());
     }
 }
 
-void ThreadPool::syncFromCloud(std::string disk_path, std::string parent_file_id)
+void ThreadPool::syncFromCloud(std::string diskPath, std::string parentFileId)
 {
-    if (disk_path.back() != '/') {
-        disk_path.push_back('/');
+    if (diskPath.back() != '/') {
+        diskPath.push_back('/');
     }
 
     // 递归获取文件列表
@@ -133,7 +135,7 @@ void ThreadPool::syncFromCloud(std::string disk_path, std::string parent_file_id
     nlohmann::json fileListReqBody;
     fileListReqBody["drive_id"] = default_drive_id;
     fileListReqBody["limit"] = 100;
-    fileListReqBody["parent_file_id"] = parent_file_id;
+    fileListReqBody["parent_file_id"] = parentFileId;
     auto fileListResp = requests::post(OPENAPI_DOMAIN_NAME OPENAPI_FILE_LIST, fileListReqBody.dump(), fileListReqHeader);
     LOGI("POST [" OPENAPI_DOMAIN_NAME OPENAPI_FILE_LIST "] => Response %d %s\r\n", fileListResp->status_code, fileListResp->status_message());
     if (fileListResp->status_code == HTTP_STATUS_OK) {
@@ -151,15 +153,47 @@ void ThreadPool::syncFromCloud(std::string disk_path, std::string parent_file_id
             for (const auto &fileItem : fileItemJsonArray) {
                 const auto &fileType = fileItem.at("type");
                 const std::string &fileItemName = fileItem.at("name").get<std::string>();
+                const std::string &fileId = fileItem.at("file_id").get<std::string>();
+                nlohmann::json sha1Hash = fileItem.at("content_hash"); // 文件夹为null
 
                 if (fileType == "folder") { // 文件夹
-                    std::filesystem::create_directories(disk_path + fileItemName);
+                    std::filesystem::create_directories(diskPath + fileItemName);
                     // 加入info表
-                    sqlHandle->exec("");
+                    try {
+                        SQLite::Statement query(*sqlHandle.get(), "INSERT INTO " SQL_TABLE_INFO " VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                        query.bind(1, default_drive_id);
+                        query.bind(2, fileId);
+                        query.bind(3, parentFileId);
+                        query.bind(4, fileItemName);
+                        query.bind(5, diskPath);
+                        query.bind(6, "");
+                        query.bind(7, std::time(NULL));
+                        query.bind(8, 1);
+                        query.exec();
+                    } catch (const std::exception& e) {
+                        LOGE("insert into info error. %s", e.what());
+                    }
 
-                    syncFromCloud(disk_path + fileItemName, fileItem["file_id"]);
+                    syncFromCloud(diskPath + fileItemName, fileId);
                 } else if (fileType == "file") { // 文件
-                    // TODO 检验数据库是否存在此文件, 如果没有则加入download表
+                    // 查询info表
+                    try {
+                        SQLite::Statement queryInfo(*sqlHandle.get(), "SELECT " TABLE_INFO_FILE_ID " FROM " SQL_TABLE_INFO " WHERE " TABLE_INFO_FILE_ID " = ?");
+                        queryInfo.bind(1, fileId);
+                        if (!queryInfo.executeStep()) { // 表中不存在数据
+                            FileDownloadItemNode node = {
+                                .drive_id = default_drive_id,
+                                .file_id = fileId,
+                                .file_path = diskPath,
+                                .file_name = fileItemName,
+                            };
+
+                            m_syncThreadHashMap.getNode(diskPath + fileItemName)->enqueue(node);
+                        }
+                    } catch (const std::exception& e) {
+                        LOGE("insert into info error. %s", e.what());
+                    }
+                } else {
 
                 }
             }

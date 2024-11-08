@@ -32,6 +32,8 @@ struct FileContentItemNode {
 struct FileDownloadItemNode {
     eular::String8  drive_id;
     eular::String8  file_id;
+    eular::String8  file_path;
+    eular::String8  file_name;
 };
 
 class SyncThread

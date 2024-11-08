@@ -30,7 +30,7 @@ public:
 
 protected:
     void flushSQLite();
-    void syncFromCloud(std::string path, std::string parent_file_id);
+    void syncFromCloud(std::string diskPath, std::string parentFileId);
 
 private:
     ConsistentHash<SyncThread>  m_syncThreadHashMap;

@@ -33,7 +33,7 @@
 #define TABLE_DOWNLOAD_FILE_ID      TABLE_INFO_FILE_ID
 #define TABLE_DOWNLOAD_DRIVE_ID     TABLE_INFO_DRIVE_ID
 #define TABLE_DOWNLOAD_FILE_NAME    TABLE_INFO_FILE_NAME
-#define TABLE_DOWNLOAD_FILE_PATH    TABLE_INFO_FILE_PATH // 相对 storage.path 路径
+#define TABLE_DOWNLOAD_FILE_PATH    TABLE_INFO_FILE_PATH
 #define TABLE_DOWNLOAD_HASH         TABLE_INFO_HASH
 #define TABLE_DOWNLOAD_TEMP_NAME    "temp_file_name"    // TEXT 临时文件名称
 
@@ -48,12 +48,12 @@
 #define TABLE_UPLOAD_FILE_ID        TABLE_INFO_FILE_ID
 #define TABLE_UPLOAD_DRIVE_ID       TABLE_INFO_DRIVE_ID
 #define TABLE_UPLOAD_FILE_NAME      TABLE_INFO_FILE_NAME
-#define TABLE_UPLOAD_FILE_PATH      TABLE_INFO_FILE_PATH // 相对 storage.path 路径
+#define TABLE_UPLOAD_FILE_PATH      TABLE_INFO_FILE_PATH
 #define TABLE_UPLOAD_TEMP_NAME      "temp_clound_nam"   // 云上的文件名, 当修改文件并上传时会出现重名情况
 
 #define SQL_CREATE_TABLE_INFO(dbName)                                   \
     "CREATE TABLE IF NOT EXISTS " dbName "." SQL_TABLE_INFO " ("        \
-        TABLE_INFO_FILE_ID " TEXT NOT NULL,"                            \
+        TABLE_INFO_FILE_ID " TEXT PRIMARY KEY NOT NULL,"                \
         TABLE_INFO_FILE_NAME " TEXT NOT NULL,"                          \
         TABLE_INFO_FILE_PATH " TEXT NOT NULL"                           \
         TABLE_INFO_PARENT_FILE_ID " TEXT NOT NULL,"                     \
@@ -66,7 +66,7 @@
 
 #define SQL_CREATE_TABLE_DOWNLOAD(dbName)                               \
     "CREATE TABLE IF NOT EXISTS " dbName "." SQL_TABLE_DOWNLOAD " ("    \
-        TABLE_DOWNLOAD_FILE_ID " TEXT NOT NULL,"                        \
+        TABLE_DOWNLOAD_FILE_ID " TEXT PRIMARY KEY NOT NULL,"            \
         TABLE_DOWNLOAD_DRIVE_ID " TEXT NOT NULL,"                       \
         TABLE_DOWNLOAD_FILE_NAME " TEXT NOT NULL,"                      \
         TABLE_DOWNLOAD_HASH " TEXT NOT NULL,"                           \
@@ -76,7 +76,7 @@
 
 #define SQL_CREATE_TABLE_UPLOAD(dbName)                                 \
     "CREATE TABLE IF NOT EXISTS " dbName "." SQL_TABLE_UPLOAD " ("      \
-        TABLE_UPLOAD_FILE_ID " TEXT NOT NULL,"                          \
+        TABLE_UPLOAD_FILE_ID " TEXT PRIMARY KEY NOT NULL,"              \
         TABLE_UPLOAD_DRIVE_ID " TEXT NOT NULL,"                         \
         TABLE_UPLOAD_FILE_NAME " TEXT NOT NULL,"                        \
         TABLE_UPLOAD_FILE_PATH " TEXT NOT NULL,"                        \

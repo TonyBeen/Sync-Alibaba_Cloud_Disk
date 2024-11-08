@@ -255,8 +255,7 @@ int32_t InotifyTool::waitCompleteEvent(uint32_t timeout)
     do {
         errorCode = ioctl(m_inotifyFd, FIONREAD, &bytesToRead);
     } while (!errorCode && bytesToRead < sizeof(struct inotify_event));
-    if (errorCode < 0)
-    {
+    if (errorCode < 0) {
         LOGE("ioctl(FIONREAD) error. [%d, %s]", errno, strerror(errno));
         setErrorCode(errno);
         return UNKNOWN_ERROR;
